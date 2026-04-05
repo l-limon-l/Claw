@@ -154,7 +154,7 @@ This tool is for **educational and research purposes only**. Automating user act
 
 <div align="center">
 
-Built by [**l_limon_l**](https://discord.com/users/396366611642318848)
+Built by [**l_limon_l**](https://e-z.bio/l_limon_l)
 
 If this helped you, drop a star &mdash; it keeps the project alive.
 
