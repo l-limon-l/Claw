@@ -3,7 +3,7 @@
 
     const CONFIG = {
         NAME: "Claw",
-        VERSION: "v4.3 (Reborn)",
+        VERSION: "v4.4",
         THEME: "#5865F2",
         SUCCESS: "#3BA55C",
         WARN: "#faa61a",
@@ -99,61 +99,204 @@
             const style = document.createElement('style');
             style.id = 'claw-styles';
             style.innerHTML = `
-                @keyframes slideIn { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-                @keyframes fadeOut { from { opacity: 1; height: 70px; } to { opacity: 0; height: 0; margin: 0; padding: 0; } }
-                @keyframes stripe { 0% { background-position: 40px 0; } 100% { background-position: 0 0; } }
+                @keyframes slideIn { from { transform: translateY(-20px) scale(0.985); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+                @keyframes fadeOut { from { opacity: 1; max-height: 140px; margin-bottom: 12px; } to { opacity: 0; max-height: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; border-width: 0; } }
                 #claw-ui {
-                    position: fixed; top: ${savedPos.top}; left: ${savedPos.left}; right: ${savedPos.right}; width: 380px;
-                    background: rgba(15, 16, 19, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-                    color: #dbdee1; border-radius: 12px; font-family: 'gg sans', 'Roboto', sans-serif;
-                    z-index: 99999; box-shadow: 0 16px 40px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.05);
-                    overflow: hidden; animation: slideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); display: flex; flex-direction: column;
+                    --bg-base: #08090a;
+                    --bg-panel: rgba(15, 16, 17, 0.96);
+                    --bg-surface: rgba(255, 255, 255, 0.03);
+                    --bg-surface-hover: rgba(255, 255, 255, 0.05);
+                    --text-primary: #f7f8f8;
+                    --text-secondary: #d0d6e0;
+                    --text-tertiary: #8a8f98;
+                    --text-quaternary: #62666d;
+                    --border-subtle: rgba(255, 255, 255, 0.05);
+                    --border-standard: rgba(255, 255, 255, 0.08);
+                    --accent: #5e6ad2;
+                    --accent-bright: #7170ff;
+                    --accent-hover: #828fff;
+                    --success: #27a644;
+                    --warn: #faa61a;
+                    --danger: #f04747;
+                    --radius-sm: 6px;
+                    --radius-md: 10px;
+                    --shadow-panel: 0 0 0 1px var(--border-subtle), 0 18px 48px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+                    --shadow-card: 0 0 0 1px var(--border-subtle), 0 10px 28px rgba(0, 0, 0, 0.24);
+                    position: fixed; top: ${savedPos.top}; left: ${savedPos.left}; right: ${savedPos.right}; width: 432px;
+                    background:
+                        radial-gradient(circle at top, rgba(113, 112, 255, 0.10), transparent 36%),
+                        linear-gradient(180deg, rgba(25, 26, 27, 0.98), rgba(15, 16, 17, 0.98));
+                    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+                    color: var(--text-secondary); border-radius: 16px;
+                    font-family: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                    font-feature-settings: "cv01", "ss03";
+                    z-index: 99999; box-shadow: var(--shadow-panel); border: 1px solid var(--border-subtle);
+                    overflow: hidden; animation: slideIn 0.32s cubic-bezier(0.2, 0.8, 0.2, 1); display: flex; flex-direction: column;
                 }
-                #claw-head { padding: 14px 16px; background: rgba(0, 0, 0, 0.3); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: grab; user-select: none; }
-                #claw-head:active { cursor: grabbing; background: rgba(0, 0, 0, 0.5); }
-                #claw-title { font-weight: 800; font-size: 14px; color: #fff; display: flex; align-items: center; gap: 8px; letter-spacing: 0.5px; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
-                #claw-title svg { color: ${CONFIG.THEME}; filter: drop-shadow(0 0 8px ${CONFIG.THEME}); }
-                #claw-controls { display: flex; gap: 10px; align-items: center; }
-                .ctrl-btn { cursor: pointer; opacity: 0.7; transition: 0.2s; display: flex; align-items: center; }
-                .ctrl-btn:hover { opacity: 1; }
-                .ctrl-stop { color: #f04747; font-weight: bold; font-size: 10px; gap: 4px; border: 1px solid rgba(240, 71, 71, 0.3); padding: 3px 8px; border-radius: 6px; background: rgba(240, 71, 71, 0.05); }
-                .ctrl-stop:hover { background: rgba(240, 71, 71, 0.15); border-color: #f04747; box-shadow: 0 0 8px rgba(240, 71, 71, 0.3); }
-                #claw-body { padding: 12px 10px 12px 12px; max-height: 400px; overflow-y: auto; flex-grow: 1; scrollbar-gutter: stable; }
-                #claw-ui ::-webkit-scrollbar { width: 6px; height: 6px; }
+                #claw-head {
+                    padding: 16px 18px 14px; display: flex; justify-content: space-between; align-items: flex-start; gap: 14px;
+                    border-bottom: 1px solid var(--border-subtle);
+                    background: linear-gradient(180deg, rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0));
+                    cursor: grab; user-select: none;
+                }
+                #claw-head:active { cursor: grabbing; }
+                #claw-brand { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+                #claw-brandmark {
+                    width: 38px; height: 38px; flex: 0 0 38px; display: flex; align-items: center; justify-content: center;
+                    border-radius: 12px; color: var(--accent-bright);
+                    background: linear-gradient(180deg, rgba(113, 112, 255, 0.22), rgba(94, 106, 210, 0.08));
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(113, 112, 255, 0.16);
+                }
+                #claw-brandmark svg { width: 17px; height: 17px; }
+                #claw-title-wrap { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+                #claw-title-row { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+                #claw-title { color: var(--text-primary); font-size: 15px; font-weight: 590; letter-spacing: -0.16px; line-height: 1.1; }
+                #claw-version { color: var(--text-tertiary); font-size: 10px; font-weight: 510; letter-spacing: 0.22px; text-transform: uppercase; }
+                #claw-subtitle { color: var(--text-tertiary); font-size: 12px; font-weight: 400; line-height: 1.5; }
+                #claw-controls { display: flex; gap: 8px; align-items: center; }
+                .ctrl-btn {
+                    appearance: none; border: 1px solid var(--border-standard); background: rgba(255, 255, 255, 0.03);
+                    color: var(--text-secondary); border-radius: var(--radius-sm); padding: 7px 10px;
+                    display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font: inherit;
+                    font-size: 11px; font-weight: 510; line-height: 1;
+                    transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+                }
+                .ctrl-btn:hover {
+                    background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.12);
+                    color: var(--text-primary); transform: translateY(-1px);
+                }
+                .ctrl-btn svg { width: 13px; height: 13px; }
+                .ctrl-stop { color: #f2c1c1; border-color: rgba(240, 71, 71, 0.22); background: rgba(240, 71, 71, 0.08); }
+                .ctrl-stop:hover { color: #ffe7e7; border-color: rgba(240, 71, 71, 0.38); background: rgba(240, 71, 71, 0.14); }
+                .ctrl-hide kbd {
+                    padding: 2px 5px; border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.08);
+                    background: rgba(255, 255, 255, 0.02); color: var(--text-quaternary);
+                    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 10px;
+                }
+                #claw-summary {
+                    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;
+                    padding: 12px 16px 14px; border-bottom: 1px solid var(--border-subtle); background: rgba(255, 255, 255, 0.01);
+                }
+                .summary-item {
+                    padding: 10px 10px 9px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);
+                    background: rgba(255, 255, 255, 0.02); display: flex; flex-direction: column; gap: 5px; min-width: 0;
+                }
+                .summary-label {
+                    color: var(--text-quaternary); font-size: 10px; font-weight: 510; line-height: 1;
+                    letter-spacing: 0.18px; text-transform: uppercase;
+                }
+                .summary-value { color: var(--text-primary); font-size: 16px; font-weight: 590; line-height: 1; letter-spacing: -0.28px; }
+                .summary-item.running .summary-value { color: var(--accent-hover); }
+                .summary-item.queued .summary-value { color: #f6d071; }
+                .summary-item.done .summary-value { color: #59d18c; }
+                .summary-item.failed .summary-value { color: #f08989; }
+                #claw-body { padding: 14px 12px 14px 14px; max-height: 388px; overflow-y: auto; flex-grow: 1; scrollbar-gutter: stable; }
+                #claw-ui ::-webkit-scrollbar { width: 7px; height: 7px; }
                 #claw-ui ::-webkit-scrollbar-track { background: transparent; }
-                #claw-ui ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 6px; }
-                #claw-ui ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
-                .task-card { display: flex; gap: 12px; padding: 12px; background: rgba(30, 31, 34, 0.6); border-radius: 10px; margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.03); border-left: 4px solid ${CONFIG.THEME}; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-                .task-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.3); background: rgba(40, 41, 45, 0.8); }
-                .task-card.done { border-left-color: ${CONFIG.SUCCESS}; background: rgba(59, 165, 92, 0.08); }
-                .task-card.failed { border-left-color: ${CONFIG.ERR}; opacity: 0.85; background: rgba(240, 71, 71, 0.05); }
-                .task-card.pending { border-left-color: ${CONFIG.WARN}; opacity: 0.7; }
-                .task-card.removing { animation: fadeOut 0.5s forwards; }
-                .task-icon { min-width: 38px; height: 38px; background: rgba(88,101,242,0.15); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: ${CONFIG.THEME}; box-shadow: inset 0 0 8px rgba(88,101,242,0.1); }
-                .task-card.done .task-icon { background: rgba(59,165,92,0.2); color: ${CONFIG.SUCCESS}; box-shadow: inset 0 0 8px rgba(59,165,92,0.1); }
-                .task-card.failed .task-icon { background: rgba(240,71,71,0.15); color: ${CONFIG.ERR}; box-shadow: inset 0 0 8px rgba(240,71,71,0.1); }
-                .task-card.pending .task-icon { background: rgba(250, 166, 26, 0.15); color: ${CONFIG.WARN}; box-shadow: inset 0 0 8px rgba(250, 166, 26, 0.1); }
-                .task-info { flex: 1; overflow: hidden; }
-                .task-top { display: flex; justify-content: space-between; margin-bottom: 6px; align-items: center; }
-                .task-name { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
-                .task-status { font-size: 10px; font-weight: 800; color: #949ba4; text-transform: uppercase; letter-spacing: 0.5px; background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; }
-                .task-meta { display: flex; justify-content: space-between; font-size: 11px; color: #b9bbbe; margin-bottom: 8px; font-weight: 500; }
-                .progress-track { height: 8px; background: rgba(0,0,0,0.4); border-radius: 4px; overflow: hidden; box-shadow: inset 0 1px 3px rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.02); }
-                .progress-fill { height: 100%; background: linear-gradient(90deg, ${CONFIG.THEME}, #a358f2); width: 0%; transition: width 0.4s ease-out; background-image: linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent); background-size: 20px 20px; animation: stripe 1s linear infinite; box-shadow: 0 0 8px rgba(163, 88, 242, 0.4); }
-                .task-card.done .progress-fill { background: linear-gradient(90deg, #3ba55c, #43c66f); animation: none; box-shadow: 0 0 8px rgba(59, 165, 92, 0.4); }
-                .task-card.failed .progress-fill { background: ${CONFIG.ERR}; width: 100% !important; animation: none; opacity: 0.4; box-shadow: none; }
-                .task-card.pending .progress-fill { width: 0% !important; animation: none; }
-                #claw-logs { padding: 12px 14px; background: rgba(0, 0, 0, 0.4); font-family: 'Consolas', 'Monaco', monospace; font-size: 11px; color: #949ba4; height: 140px; overflow-y: auto; border-top: 1px solid rgba(255,255,255,0.05); scroll-behavior: smooth; box-shadow: inset 0 4px 8px rgba(0,0,0,0.2); }
-                .log-item { margin-bottom: 5px; display: flex; gap: 8px; line-height: 1.4; border-bottom: 1px solid rgba(255,255,255,0.02); padding-bottom: 4px; }
-                .log-item:last-of-type { border: none; margin-bottom: 0; padding-bottom: 0; }
-                .log-ts { opacity: 0.5; min-width: 55px; font-size: 10px; font-weight: bold; }
-                .c-info { color: #8ea1e1; } .c-success { color: #57f287; } .c-err { color: #ed4245; } .c-warn { color: #fee75c; } .c-debug { color: #80848e; }
-                #claw-footer { padding: 10px; text-align: center; background: rgba(0, 0, 0, 0.5); border-top: 1px solid rgba(255,255,255,0.05); font-size: 10px; color: #72767d; backdrop-filter: blur(10px); }
-                .dev-btn { color: ${CONFIG.THEME}; text-decoration: none; font-weight: 700; transition: all 0.2s; margin: 0 4px; padding: 2px 6px; border-radius: 4px; }
-                .dev-btn:hover { color: #fff; background: rgba(88,101,242,0.2); }
-                .claim-btn { padding: 6px 12px; background: linear-gradient(135deg, #3ba55c, #2d8a4a); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 10px; font-weight: 800; cursor: pointer; margin-top: 8px; transition: all 0.2s ease; text-transform: uppercase; letter-spacing: 0.5px; width: 100%; box-shadow: 0 4px 10px rgba(59, 165, 92, 0.3); }
-                .claim-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(59, 165, 92, 0.4); background: linear-gradient(135deg, #43c66f, #3ba55c); border-color: rgba(255,255,255,0.3); }
-                .claim-btn:active { transform: translateY(1px); box-shadow: 0 2px 6px rgba(59, 165, 92, 0.3); }
+                #claw-ui ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.10); border-radius: 999px; }
+                #claw-ui ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.18); }
+                .claw-empty {
+                    min-height: 184px; border: 1px solid var(--border-subtle); border-radius: 14px;
+                    background: radial-gradient(circle at top right, rgba(113, 112, 255, 0.12), transparent 32%), linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.015));
+                    display: flex; flex-direction: column; justify-content: center; padding: 24px 22px;
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+                }
+                .claw-empty-eyebrow { color: var(--text-quaternary); font-size: 10px; font-weight: 510; text-transform: uppercase; letter-spacing: 0.2px; margin-bottom: 10px; }
+                .claw-empty-title { color: var(--text-primary); font-size: 18px; font-weight: 590; line-height: 1.2; letter-spacing: -0.28px; margin-bottom: 8px; }
+                .claw-empty-copy { color: var(--text-tertiary); font-size: 13px; line-height: 1.6; max-width: 280px; }
+                .task-card {
+                    display: flex; gap: 12px; padding: 14px;
+                    background: linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0.02));
+                    border-radius: 12px; margin-bottom: 12px; border: 1px solid var(--border-standard);
+                    transition: transform 0.22s ease, border-color 0.22s ease, background 0.22s ease, box-shadow 0.22s ease;
+                    box-shadow: var(--shadow-card);
+                }
+                .task-card:hover {
+                    transform: translateY(-1px); border-color: rgba(255, 255, 255, 0.12);
+                    background: linear-gradient(180deg, rgba(255, 255, 255, 0.042), rgba(255, 255, 255, 0.028));
+                }
+                .task-card.active { box-shadow: 0 0 0 1px rgba(113, 112, 255, 0.08), 0 12px 30px rgba(0, 0, 0, 0.26); }
+                .task-card.done { border-color: rgba(39, 166, 68, 0.26); background: linear-gradient(180deg, rgba(16, 185, 129, 0.09), rgba(39, 166, 68, 0.045)); }
+                .task-card.failed { border-color: rgba(240, 71, 71, 0.24); background: linear-gradient(180deg, rgba(240, 71, 71, 0.09), rgba(240, 71, 71, 0.04)); }
+                .task-card.pending { border-color: rgba(250, 166, 26, 0.22); background: linear-gradient(180deg, rgba(250, 166, 26, 0.07), rgba(250, 166, 26, 0.03)); }
+                .task-card.removing { overflow: hidden; animation: fadeOut 0.45s forwards; }
+                .task-icon {
+                    width: 42px; height: 42px; min-width: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+                    color: var(--accent-hover); background: linear-gradient(180deg, rgba(113, 112, 255, 0.18), rgba(94, 106, 210, 0.06));
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(113, 112, 255, 0.12);
+                }
+                .task-icon svg { width: 19px; height: 19px; }
+                .task-card.done .task-icon { color: #79e4aa; background: linear-gradient(180deg, rgba(16, 185, 129, 0.24), rgba(16, 185, 129, 0.08)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(16, 185, 129, 0.18); }
+                .task-card.failed .task-icon { color: #ffb5b5; background: linear-gradient(180deg, rgba(240, 71, 71, 0.22), rgba(240, 71, 71, 0.08)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 0 0 1px rgba(240, 71, 71, 0.16); }
+                .task-card.pending .task-icon { color: #f7d37a; background: linear-gradient(180deg, rgba(250, 166, 26, 0.20), rgba(250, 166, 26, 0.08)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 0 0 1px rgba(250, 166, 26, 0.14); }
+                .task-info { flex: 1; overflow: hidden; min-width: 0; }
+                .task-top { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 8px; align-items: flex-start; }
+                .task-name {
+                    font-size: 13px; font-weight: 510; line-height: 1.35; white-space: nowrap; overflow: hidden;
+                    text-overflow: ellipsis; color: var(--text-primary); letter-spacing: -0.08px; min-width: 0;
+                }
+                .task-status {
+                    flex: 0 0 auto; color: var(--text-tertiary); font-size: 10px; font-weight: 510; text-transform: uppercase;
+                    letter-spacing: 0.2px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.06);
+                    padding: 4px 7px; border-radius: 999px; line-height: 1;
+                }
+                .task-card.active .task-status { color: #c4c9ff; border-color: rgba(113, 112, 255, 0.16); background: rgba(113, 112, 255, 0.09); }
+                .task-card.done .task-status { color: #b8f3d2; border-color: rgba(16, 185, 129, 0.20); background: rgba(16, 185, 129, 0.10); }
+                .task-card.failed .task-status { color: #ffc5c5; border-color: rgba(240, 71, 71, 0.20); background: rgba(240, 71, 71, 0.10); }
+                .task-card.pending .task-status { color: #fce3a5; border-color: rgba(250, 166, 26, 0.18); background: rgba(250, 166, 26, 0.10); }
+                .task-meta { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; color: var(--text-tertiary); margin-bottom: 10px; line-height: 1.4; }
+                .task-kind { color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                .progress-text { color: var(--text-secondary); font-weight: 510; font-variant-numeric: tabular-nums; }
+                .progress-track {
+                    height: 7px; background: rgba(0, 0, 0, 0.42); border-radius: 999px; overflow: hidden;
+                    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.32); border: 1px solid rgba(255, 255, 255, 0.03);
+                }
+                .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-bright)); width: 0%; transition: width 0.32s ease-out; box-shadow: 0 0 12px rgba(113, 112, 255, 0.28); }
+                .task-card.done .progress-fill { background: linear-gradient(90deg, #27a644, #10b981); box-shadow: 0 0 10px rgba(16, 185, 129, 0.22); }
+                .task-card.failed .progress-fill { background: linear-gradient(90deg, rgba(240, 71, 71, 0.9), rgba(240, 71, 71, 0.55)); box-shadow: none; }
+                .task-card.pending .progress-fill { background: linear-gradient(90deg, rgba(250, 166, 26, 0.65), rgba(250, 166, 26, 0.35)); box-shadow: none; }
+                .claim-btn {
+                    width: 100%; margin-top: 10px; padding: 8px 12px; border-radius: var(--radius-sm);
+                    border: 1px solid rgba(16, 185, 129, 0.28); background: linear-gradient(180deg, rgba(16, 185, 129, 0.18), rgba(16, 185, 129, 0.10));
+                    color: #eafbf3; font-size: 11px; font-weight: 510; letter-spacing: 0.12px; cursor: pointer;
+                    transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+                }
+                .claim-btn:hover { transform: translateY(-1px); border-color: rgba(16, 185, 129, 0.42); background: linear-gradient(180deg, rgba(16, 185, 129, 0.24), rgba(16, 185, 129, 0.14)); }
+                .claim-btn:active { transform: translateY(0); }
+                #claw-logs-wrap { border-top: 1px solid var(--border-subtle); background: linear-gradient(180deg, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.24)); }
+                #claw-logs-head {
+                    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+                    padding: 12px 14px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); color: var(--text-secondary);
+                    font-size: 11px; font-weight: 510; text-transform: uppercase; letter-spacing: 0.22px;
+                }
+                #claw-log-meta {
+                    color: var(--text-quaternary); font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+                    text-transform: none; letter-spacing: 0; font-size: 10px;
+                }
+                #claw-logs {
+                    padding: 10px 14px 12px; font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+                    font-size: 11px; color: var(--text-tertiary); height: 148px; overflow-y: auto; scroll-behavior: smooth;
+                }
+                .log-item {
+                    display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 10px; line-height: 1.55;
+                    padding: 6px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+                }
+                .log-item:last-of-type { border-bottom: none; }
+                .log-ts { color: var(--text-quaternary); font-size: 10px; font-weight: 510; white-space: nowrap; }
+                .log-text { min-width: 0; word-break: break-word; }
+                .c-info .log-text { color: #9aa8ff; }
+                .c-success .log-text { color: #77deaa; }
+                .c-err .log-text { color: #ff9d9d; }
+                .c-warn .log-text { color: #f5d27b; }
+                .c-debug .log-text { color: var(--text-quaternary); }
+                #claw-footer {
+                    padding: 10px 14px 12px; border-top: 1px solid rgba(255, 255, 255, 0.04); background: rgba(255, 255, 255, 0.01);
+                    color: var(--text-quaternary); font-size: 10px; line-height: 1.4; text-align: center;
+                }
+                #claw-footer strong { color: var(--text-tertiary); font-weight: 510; }
+                .dev-btn { color: var(--text-tertiary); text-decoration: none; transition: color 0.18s ease; }
+                .dev-btn:hover { color: var(--text-primary); }
             `;
             document.head.appendChild(style);
 
@@ -161,23 +304,37 @@
             this.root.id = 'claw-ui';
             this.root.innerHTML = `
                 <div id="claw-head">
-                    <span id="claw-title">${ICONS.BOLT} ${CONFIG.NAME} <span style="opacity:0.5; font-size:10px; margin:2px 0 0 5px;">${CONFIG.VERSION}</span></span>
+                    <div id="claw-brand">
+                        <div id="claw-brandmark">${ICONS.BOLT}</div>
+                        <div id="claw-title-wrap">
+                            <div id="claw-title-row">
+                                <span id="claw-title">${CONFIG.NAME}</span>
+                                <span id="claw-version">${CONFIG.VERSION}</span>
+                            </div>
+                            <div id="claw-subtitle">Quest control center</div>
+                        </div>
+                    </div>
                     <div id="claw-controls">
-                        <span class="ctrl-btn ctrl-stop" id="claw-stop" title="Stop script & cleanup">${ICONS.STOP} STOP</span>
-                        <span class="ctrl-btn" style="font-size:10px; color:#949ba4;" id="claw-close" title="Shift + .">HIDE</span>
+                        <button class="ctrl-btn ctrl-stop" id="claw-stop" title="Stop script & cleanup" type="button">${ICONS.STOP}<span>Stop</span></button>
+                        <button class="ctrl-btn ctrl-hide" id="claw-close" title="Shift + ." type="button"><span>Hide</span><kbd>Shift+.</kbd></button>
                     </div>
                 </div>
-                <div id="claw-body"><div style="text-align:center; padding:30px; color:#949ba4; font-size:12px">Initializing System...</div></div>
-                <div id="claw-logs"></div>
-                <div id="claw-footer">Developed by: <a href="https://e-z.bio/l_limon_l" target="_blank" class="dev-btn">l_limon_l</a> | <a href="https://fakecrime.bio/l_limon_l" target="_blank" class="dev-btn">More Info</a></div>
+                <div id="claw-summary"></div>
+                <div id="claw-body">${this.getEmptyStateHTML('System', 'Initializing control center', 'Scanning Discord modules and preparing quest runners.')}</div>
+                <div id="claw-logs-wrap">
+                    <div id="claw-logs-head"><span>Activity Log</span><span id="claw-log-meta">live console</span></div>
+                    <div id="claw-logs"></div>
+                </div>
+                <div id="claw-footer"><strong>Built by</strong> <a href="https://e-z.bio/l_limon_l" target="_blank" class="dev-btn">l_limon_l</a> | <a href="https://fakecrime.bio/l_limon_l" target="_blank" class="dev-btn">More info</a></div>
             `;
             document.body.appendChild(this.root);
+            this.renderSummary();
 
             const head = document.getElementById('claw-head');
             let isDragging = false, startX, startY, initialLeft, initialTop;
 
             head.onmousedown = e => {
-                if (e.target.closest('.ctrl-btn')) return;
+                if (e.target.closest?.('.ctrl-btn')) return;
                 isDragging = true;
                 startX = e.clientX; startY = e.clientY;
                 const rect = this.root.getBoundingClientRect();
@@ -202,32 +359,32 @@
             };
 
             document.getElementById('claw-body').addEventListener('click', async (e) => {
-                if (e.target.classList.contains('claim-btn')) {
-                    const btn = e.target;
-                    const questId = btn.getAttribute('data-id');
-                    const taskData = this.tasks.get(questId);
+                const btn = e.target.closest?.('.claim-btn');
+                if (!btn) return;
 
-                    btn.innerText = "WAITING...";
-                    btn.style.opacity = "0.5";
-                    btn.style.pointerEvents = "none";
+                const questId = btn.getAttribute('data-id');
+                const taskData = this.tasks.get(questId);
 
-                    try {
-                        const claimRes = await Tasks.claimReward(questId);
+                btn.innerText = "WAITING...";
+                btn.style.opacity = "0.5";
+                btn.style.pointerEvents = "none";
 
-                        if (claimRes?.body?.claimed_at) {
-                            btn.innerText = "CLAIMED!";
-                            btn.style.background = CONFIG.SUCCESS;
-                            this.log(`[Claim] ${taskData?.name || 'Reward'} claimed successfully!`, 'success');
+                try {
+                    const claimRes = await Tasks.claimReward(questId);
 
-                            this.updateTask(questId, { ...taskData, status: "CLAIMED", claimable: false });
-                            setTimeout(() => this.removeTask(questId), 2000);
-                        }
-                    } catch (err) {
-                        btn.innerText = "CLAIM REWARD";
-                        btn.style.opacity = "1";
-                        btn.style.pointerEvents = "auto";
-                        this.log(`[Claim] Action required for ${taskData?.name || 'quest'}. Check Discord UI for captcha.`, 'warn');
+                    if (claimRes?.body?.claimed_at) {
+                        btn.innerText = "CLAIMED!";
+                        btn.style.background = CONFIG.SUCCESS;
+                        this.log(`[Claim] ${taskData?.name || 'Reward'} claimed successfully!`, 'success');
+
+                        this.updateTask(questId, { ...taskData, status: "CLAIMED", claimable: false });
+                        setTimeout(() => this.removeTask(questId), 2000);
                     }
+                } catch (err) {
+                    btn.innerText = "CLAIM REWARD";
+                    btn.style.opacity = "1";
+                    btn.style.pointerEvents = "auto";
+                    this.log(`[Claim] Action required for ${taskData?.name || 'quest'}. Check Discord UI for captcha.`, 'warn');
                 }
             });
 
@@ -257,6 +414,64 @@
             }, 1000);
         },
 
+        getTaskSummary() {
+            const counts = { running: 0, queued: 0, done: 0, failed: 0 };
+            for (const task of this.tasks.values()) {
+                if (task?.failed) counts.failed++;
+                else if (task?.done) counts.done++;
+                else if (task?.pending) counts.queued++;
+                else counts.running++;
+            }
+            return counts;
+        },
+
+        renderSummary() {
+            const summary = document.getElementById('claw-summary');
+            if (!summary) return;
+
+            const counts = this.getTaskSummary();
+            summary.innerHTML = `
+                <div class="summary-item running"><span class="summary-label">Running</span><span class="summary-value">${counts.running}</span></div>
+                <div class="summary-item queued"><span class="summary-label">Queued</span><span class="summary-value">${counts.queued}</span></div>
+                <div class="summary-item done"><span class="summary-label">Done</span><span class="summary-value">${counts.done}</span></div>
+                <div class="summary-item failed"><span class="summary-label">Failed</span><span class="summary-value">${counts.failed}</span></div>
+            `;
+        },
+
+        getEmptyStateHTML(eyebrow, title, description) {
+            return `
+                <div class="claw-empty">
+                    <div class="claw-empty-eyebrow">${eyebrow}</div>
+                    <div class="claw-empty-title">${title}</div>
+                    <div class="claw-empty-copy">${description}</div>
+                </div>
+            `;
+        },
+
+        getTaskMetaLabel(task) {
+            if (task.pending) return 'Queued task';
+            if (task.failed) return 'Run aborted';
+
+            const labels = {
+                WATCH_VIDEO: 'Video quest',
+                VIDEO: 'Video quest',
+                GAME: 'Desktop game',
+                STREAM: 'Desktop stream',
+                ACTIVITY: 'Voice activity',
+                ACHIEVEMENT: 'Activity achievement'
+            };
+            return labels[task.type] ?? 'Quest progress';
+        },
+
+        getTaskStatusText(task) {
+            if (task.status === "CLAIMED") return "Claimed";
+            if (task.done) return "Done";
+            if (task.failed) return "Failed";
+            if (task.pending) return "Queued";
+            if (task.status === "RUNNING") return "Running";
+            return task.status ?? "Idle";
+        },
+
         updateTask(id, data) {
             const oldData = this.tasks.get(id);
             const isPending = data.status === "PENDING" || data.status === "QUEUE";
@@ -269,7 +484,7 @@
             if (oldData && oldData.status === newData.status && oldData.removing === newData.removing && oldData.claimable === newData.claimable) {
                 const card = document.getElementById(`claw-task-${id}`);
                 if (card) {
-                    const pct = newData.pending || newData.failed ? 0 : Math.min(100, (newData.cur / newData.max) * 100).toFixed(1);
+                    const pct = newData.pending ? 0 : Math.min(100, (newData.cur / newData.max) * 100).toFixed(1);
 
                     const fill = card.querySelector('.progress-fill');
                     if (fill) fill.style.width = `${pct}%`;
@@ -298,9 +513,26 @@
             try {
                 const box = document.getElementById('claw-logs');
                 if (box) {
-                    const el = document.createElement('div'); el.className = `log-item c-${type}`;
-                    el.innerHTML = `<span class="log-ts">${new Date().toLocaleTimeString().split(' ')[0]}</span> <span>${msg}</span>`;
-                    box.appendChild(el); box.scrollTop = box.scrollHeight;
+                    const el = document.createElement('div');
+                    const ts = document.createElement('span');
+                    const text = document.createElement('span');
+
+                    el.className = `log-item c-${type}`;
+                    ts.className = 'log-ts';
+                    text.className = 'log-text';
+
+                    ts.textContent = new Date().toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                        hour12: false
+                    });
+                    text.textContent = msg;
+
+                    el.appendChild(ts);
+                    el.appendChild(text);
+                    box.appendChild(el);
+                    box.scrollTop = box.scrollHeight;
                     while (box.children.length > CONFIG.MAX_LOG_ITEMS) box.firstChild.remove();
                 }
             } catch (e) { console.debug('[Logger] DOM error:', e.message); }
@@ -309,7 +541,12 @@
         render() {
             const body = document.getElementById('claw-body');
             if (!body) return;
-            if (!this.tasks.size) return body.innerHTML = `<div style="text-align:center; padding:30px; color:#949ba4; font-size:12px">Waiting for tasks...</div>`;
+
+            this.renderSummary();
+            if (!this.tasks.size) {
+                body.innerHTML = this.getEmptyStateHTML('Queue', 'Standing by for quests', 'Waiting for the next eligible quest or manual reward action.');
+                return;
+            }
 
             const sorted =[...this.tasks.entries()].sort((a, b) => {
                 const ta = a[1], tb = b[1];
@@ -325,22 +562,22 @@
             });
 
             body.innerHTML = sorted.map(([id, t]) => {
-                const pct = t.pending || t.failed ? 0 : Math.min(100, (t.cur / t.max) * 100).toFixed(1);
+                const pct = t.pending ? 0 : Math.min(100, (t.cur / t.max) * 100).toFixed(1);
                 let icon = ICONS.BOLT;
                 if (t.done) icon = ICONS.CHECK;
                 else if (t.failed) icon = ICONS.STOP;
                 else if (t.pending) icon = ICONS.CLOCK;
-                else if (t.type === 'VIDEO') icon = ICONS.VIDEO;
+                else if (t.type === 'VIDEO' || t.type === 'WATCH_VIDEO') icon = ICONS.VIDEO;
                 else if (t.type === 'ACHIEVEMENT') icon = ICONS.ACTIVITY;
                 else if (t.type?.includes('GAME')) icon = ICONS.GAME;
                 else if (t.type?.includes('STREAM')) icon = ICONS.STREAM;
 
-                const claimBtn = t.claimable ? `<button class="claim-btn" data-id="${t.questId}">CLAIM REWARD</button>` : '';
-                const statusText = t.status === 'CLAIMED' ? 'CLAIMED' : t.done ? 'DONE' : t.status;
-                const stateClass = t.done ? 'done' : t.failed ? 'failed' : t.pending ? 'pending' : '';
+                const claimBtn = t.claimable ? `<button class="claim-btn" data-id="${t.questId}" type="button">CLAIM REWARD</button>` : '';
+                const statusText = this.getTaskStatusText(t);
+                const stateClass = t.done ? 'done' : t.failed ? 'failed' : t.pending ? 'pending' : 'active';
                 const removingClass = t.removing ? 'removing' : '';
 
-                return `<div id="claw-task-${id}" class="task-card ${stateClass} ${removingClass}"><div class="task-icon">${icon}</div><div class="task-info"><div class="task-top"><div class="task-name" title="${t.name}">${t.name}</div><div class="task-status">${statusText}</div></div><div class="task-meta"><span>${t.pending ? 'In Queue' : t.failed ? 'Aborted' : 'Progress'}</span><span class="progress-text">${Math.floor(t.cur)} / ${t.max}s</span></div><div class="progress-track"><div class="progress-fill" style="width: ${pct}%"></div></div>${claimBtn}</div></div>`;
+                return `<div id="claw-task-${id}" class="task-card ${stateClass} ${removingClass}"><div class="task-icon">${icon}</div><div class="task-info"><div class="task-top"><div class="task-name" title="${t.name}">${t.name}</div><div class="task-status">${statusText}</div></div><div class="task-meta"><span class="task-kind">${this.getTaskMetaLabel(t)}</span><span class="progress-text">${Math.floor(t.cur)} / ${t.max}s</span></div><div class="progress-track"><div class="progress-fill" style="width: ${pct}%"></div></div>${claimBtn}</div></div>`;
             }).join('');
         }
     };
