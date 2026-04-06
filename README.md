@@ -1,7 +1,7 @@
 <div align="center">
 # Claw
 
-**Auto-complete every Discord Quest in seconds** &mdash; v4.3
+**Auto-complete every Discord Quest in seconds** &mdash; v4.4
 
 [![Version](https://img.shields.io/badge/v4.4-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://github.com/nyxxbit/discord-quest-completer)
 
