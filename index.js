@@ -3,7 +3,7 @@
 
     const CONFIG = {
         NAME: "Claw",
-        VERSION: "v4.4",
+        VERSION: "v4.6",
         THEME: "#7170ff",
         SUCCESS: "#10b981",
         WARN: "#f59e0b",
@@ -23,7 +23,9 @@
 
     const RUNTIME = {
         running: true,
-        cleanups: new Set()
+        cleanups: new Set(),
+        selectedQuests: null,
+        autoEnroll: true
     };
 
     const ICONS = Object.freeze({
@@ -139,9 +141,7 @@
                 }
                 #claw-head {
                     padding: 16px 18px 14px; display: flex; justify-content: space-between; align-items: flex-start; gap: 14px;
-                    border-bottom: 1px solid var(--border-subtle);
-                    background: transparent;
-                    cursor: grab; user-select: none;
+                    border-bottom: 1px solid var(--border-subtle); background: transparent; cursor: grab; user-select: none;
                 }
                 #claw-head:active { cursor: grabbing; }
                 #claw-brand { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
@@ -162,20 +162,17 @@
                     appearance: none; border: none; background: rgba(255, 255, 255, 0.03);
                     color: var(--text-secondary); border-radius: var(--radius-sm); padding: 7px 10px;
                     display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font: inherit;
-                    font-size: 11px; font-weight: 500; line-height: 1;
-                    transition: background 0.15s ease, opacity 0.15s ease;
+                    font-size: 11px; font-weight: 500; line-height: 1; transition: background 0.15s ease, opacity 0.15s ease;
                     box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
                 }
-                .ctrl-btn:hover {
-                    background: rgba(255, 255, 255, 0.06);
-                }
+                .ctrl-btn:hover { background: rgba(255, 255, 255, 0.06); }
                 .ctrl-btn svg { width: 13px; height: 13px; }
                 .ctrl-stop { color: var(--danger-bright); box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.25); }
                 .ctrl-stop:hover { background: rgba(239, 68, 68, 0.08); }
                 .ctrl-hide kbd {
                     padding: 2px 5px; border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.06);
                     background: rgba(255, 255, 255, 0.04); color: var(--text-quaternary);
-                    font-family: "Berkeley Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 10px;
+                    font-family: "Berkeley Mono", ui-monospace, monospace; font-size: 10px;
                 }
                 #claw-summary {
                     display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;
@@ -186,10 +183,7 @@
                     background: var(--bg-surface); display: flex; flex-direction: column; gap: 5px; min-width: 0;
                     box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05);
                 }
-                .summary-label {
-                    color: var(--text-quaternary); font-size: 10px; font-weight: 500; line-height: 1;
-                    letter-spacing: 0.2px; text-transform: uppercase;
-                }
+                .summary-label { color: var(--text-quaternary); font-size: 10px; font-weight: 500; line-height: 1; letter-spacing: 0.2px; text-transform: uppercase; }
                 .summary-value { color: var(--text-primary); font-size: 16px; font-weight: 510; line-height: 1; letter-spacing: -0.01em; }
                 .summary-item.running .summary-value { color: var(--accent-bright); }
                 .summary-item.queued .summary-value { color: var(--warn-bright); }
@@ -200,6 +194,8 @@
                 #claw-ui ::-webkit-scrollbar-track { background: transparent; }
                 #claw-ui ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.07); border-radius: 999px; }
                 #claw-ui ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.13); }
+
+                /* Empty states */
                 .claw-empty {
                     min-height: 184px; border: none; border-radius: 10px;
                     background: radial-gradient(ellipse at top right, rgba(113, 112, 255, 0.04), transparent 50%), var(--bg-panel);
@@ -209,16 +205,15 @@
                 .claw-empty-eyebrow { color: var(--text-quaternary); font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2px; margin-bottom: 10px; }
                 .claw-empty-title { color: var(--text-primary); font-size: 18px; font-weight: 510; line-height: 1.2; letter-spacing: -0.01em; margin-bottom: 8px; }
                 .claw-empty-copy { color: var(--text-tertiary); font-size: 13px; line-height: 1.6; max-width: 280px; }
+
+                /* Task Cards */
                 .task-card {
-                    display: flex; gap: 12px; padding: 14px;
-                    background: var(--bg-panel);
+                    display: flex; gap: 12px; padding: 14px; background: var(--bg-panel);
                     border-radius: 10px; margin-bottom: 10px; border: none;
                     transition: background 0.18s ease, box-shadow 0.18s ease;
                     box-shadow: var(--shadow-card);
                 }
-                .task-card:hover {
-                    background: rgba(255, 255, 255, 0.03);
-                }
+                .task-card:hover { background: rgba(255, 255, 255, 0.03); }
                 .task-card.active { box-shadow: 0 0 0 1px rgba(113, 112, 255, 0.18); }
                 .task-card.done { background: rgba(16, 185, 129, 0.03); box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.16); }
                 .task-card.failed { background: rgba(239, 68, 68, 0.03); box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.16); }
@@ -259,15 +254,69 @@
                 .task-card.done .progress-fill { background: linear-gradient(90deg, #10b981, #34d399); box-shadow: 0 0 8px rgba(16, 185, 129, 0.18); }
                 .task-card.failed .progress-fill { background: linear-gradient(90deg, rgba(239, 68, 68, 0.85), rgba(239, 68, 68, 0.50)); box-shadow: none; }
                 .task-card.pending .progress-fill { background: linear-gradient(90deg, rgba(245, 158, 11, 0.60), rgba(245, 158, 11, 0.30)); box-shadow: none; }
+
+                /* Buttons */
                 .claim-btn {
                     width: 100%; margin-top: 10px; padding: 8px 14px; border-radius: var(--radius-pill);
-                    border: none; background: rgba(16, 185, 129, 0.12);
-                    color: #d1fae5; font-size: 11px; font-weight: 510; letter-spacing: 0.3px; cursor: pointer;
-                    transition: background 0.15s ease;
-                    box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.28);
+                    border: none; background: rgba(16, 185, 129, 0.12); color: #d1fae5; font-size: 11px; font-weight: 510;
+                    letter-spacing: 0.3px; cursor: pointer; transition: background 0.15s ease;
+                    box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.28); text-transform: uppercase;
                 }
                 .claim-btn:hover { background: rgba(16, 185, 129, 0.18); }
                 .claim-btn:active { background: rgba(16, 185, 129, 0.22); }
+
+                .goto-btn {
+                    width: 100%; margin-top: 10px; padding: 8px 14px; border-radius: var(--radius-pill);
+                    border: none; background: rgba(113, 112, 255, 0.15); color: var(--accent-bright); font-size: 11px;
+                    font-weight: 510; letter-spacing: 0.3px; cursor: pointer; transition: background 0.15s ease;
+                    box-shadow: 0 0 0 1px rgba(113, 112, 255, 0.25); text-transform: uppercase;
+                }
+                .goto-btn:hover { background: rgba(113, 112, 255, 0.25); }
+
+                /* Quest Picker Menu */
+                .quest-pick {
+                    display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg-surface);
+                    border-radius: var(--radius-md); margin-bottom: 8px; cursor: pointer; transition: background 0.15s ease, box-shadow 0.15s ease;
+                    box-shadow: var(--shadow-card); border-left: 4px solid var(--accent-bright);
+                }
+                .quest-pick:hover { background: var(--bg-surface-hover); }
+                .quest-pick.hidden { display: none; }
+                .quest-pick input[type="checkbox"] { accent-color: var(--accent-bright); width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
+                .quest-pick-info { flex: 1; overflow: hidden; }
+                .quest-pick-name { font-size: 13px; font-weight: 510; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                .quest-pick-meta { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+                .quest-pick-type { font-size: 10px; font-weight: 500; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; }
+                .quest-pick-reward { font-size: 10px; font-weight: 500; }
+                .quest-pick-section { font-size: 11px; color: var(--text-tertiary); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; margin-top: 4px; }
+                .quest-pick-filters { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+                .reward-filter {
+                    padding: 6px 12px; border-radius: var(--radius-pill); font-size: 10px; font-weight: 510; cursor: pointer;
+                    transition: all 0.15s ease; text-transform: uppercase; letter-spacing: 0.3px; border-width: 1px; border-style: solid;
+                    background: transparent; color: var(--text-secondary);
+                }
+                .reward-filter:not(.off) { background: rgba(255,255,255,0.05); }
+                .reward-filter.off { opacity: 0.4; border-color: var(--border-standard) !important; color: var(--text-quaternary) !important; }
+                .quest-pick-actions { display: flex; gap: 8px; padding: 12px 0 4px; }
+                .quest-pick-btn {
+                    flex: 1; padding: 10px; border: none; border-radius: var(--radius-md); color: #fff; font-size: 12px;
+                    font-weight: 510; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px; transition: opacity 0.2s;
+                }
+                .quest-pick-btn:hover { opacity: 0.9; }
+                .quest-pick-btn.start { background: var(--success); box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.4); }
+                .quest-pick-btn.start.disabled { opacity: 0.4; pointer-events: none; }
+                .quest-pick-btn.toggle { background: var(--bg-surface); color: var(--text-secondary); border: 1px solid var(--border-standard); }
+
+                .claw-option { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border-subtle); }
+                .claw-option:last-child { border: none; }
+                .claw-option-label { font-size: 12px; color: var(--text-secondary); }
+                .claw-toggle { position: relative; width: 36px; height: 20px; cursor: pointer; }
+                .claw-toggle input { opacity: 0; width: 0; height: 0; }
+                .claw-toggle .slider { position: absolute; inset: 0; background: var(--bg-elevated); border: 1px solid var(--border-standard); border-radius: 10px; transition: 0.2s; }
+                .claw-toggle .slider::before { content: ''; position: absolute; height: 14px; width: 14px; left: 2px; bottom: 2px; background: var(--text-secondary); border-radius: 50%; transition: 0.2s; }
+                .claw-toggle input:checked + .slider { background: var(--success); border-color: var(--success); }
+                .claw-toggle input:checked + .slider::before { transform: translateX(16px); background: #fff; }
+
+                /* Logs */
                 #claw-logs-wrap { border-top: 1px solid var(--border-subtle); background: rgba(0, 0, 0, 0.12); }
                 #claw-logs-head {
                     display: flex; justify-content: space-between; align-items: center; gap: 10px;
@@ -275,11 +324,11 @@
                     font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.22px;
                 }
                 #claw-log-meta {
-                    color: var(--text-quaternary); font-family: "Berkeley Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+                    color: var(--text-quaternary); font-family: "Berkeley Mono", ui-monospace, monospace;
                     text-transform: none; letter-spacing: 0; font-size: 10px;
                 }
                 #claw-logs {
-                    padding: 10px 14px 12px; font-family: "Berkeley Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+                    padding: 10px 14px 12px; font-family: "Berkeley Mono", ui-monospace, monospace;
                     font-size: 11px; color: var(--text-tertiary); height: 148px; overflow-y: auto; scroll-behavior: smooth;
                 }
                 .log-item {
@@ -294,6 +343,7 @@
                 .c-err .log-text { color: #fca5a5; }
                 .c-warn .log-text { color: #fcd34d; }
                 .c-debug .log-text { color: var(--text-quaternary); }
+
                 #claw-footer {
                     padding: 10px 14px 12px; border-top: 1px solid rgba(255, 255, 255, 0.04); background: transparent;
                     color: var(--text-quaternary); font-size: 10px; line-height: 1.4; text-align: center;
@@ -332,7 +382,6 @@
                 <div id="claw-footer"><strong>Built by</strong> <a href="https://e-z.bio/l_limon_l" target="_blank" class="dev-btn">l_limon_l</a> | <a href="https://fakecrime.bio/l_limon_l" target="_blank" class="dev-btn">More info</a></div>
             `;
             document.body.appendChild(this.root);
-            this.renderSummary();
 
             const head = document.getElementById('claw-head');
             let isDragging = false, startX, startY, initialLeft, initialTop;
@@ -363,6 +412,13 @@
             };
 
             document.getElementById('claw-body').addEventListener('click', async (e) => {
+                if (e.target.classList.contains('goto-btn')) {
+                    if (Mods.Router) {
+                        Mods.Router.transitionTo('/quest-home');
+                    }
+                    return;
+                }
+
                 const btn = e.target.closest?.('.claim-btn');
                 if (!btn) return;
 
@@ -379,7 +435,7 @@
                     if (claimRes?.body?.claimed_at) {
                         btn.innerText = "CLAIMED!";
                         btn.style.background = CONFIG.SUCCESS;
-                        this.log(`[Claim] ${taskData?.name || 'Reward'} claimed successfully!`, 'success');
+                        this.log(`[Claim] Reward for "${taskData?.name || 'Quest'}" claimed successfully!`, 'success');
 
                         this.updateTask(questId, { ...taskData, status: "CLAIMED", claimable: false });
                         setTimeout(() => this.removeTask(questId), 2000);
@@ -388,7 +444,7 @@
                     btn.innerText = "CLAIM REWARD";
                     btn.style.opacity = "1";
                     btn.style.pointerEvents = "auto";
-                    this.log(`[Claim] Action required for ${taskData?.name || 'quest'}. Check Discord UI for captcha.`, 'warn');
+                    this.log(`[Claim] Action required for "${taskData?.name || 'Quest'}". Check Discord UI for captcha.`, 'warn');
                 }
             });
 
@@ -396,7 +452,9 @@
             document.getElementById('claw-stop').onclick = () => this.shutdown();
             document.addEventListener('keydown', e => (e.key === '>' || (e.shiftKey && e.key === '.')) && this.toggle());
 
-            try { if (Notification.permission === "default") Notification.requestPermission(); } catch (e) { }
+            try { if (Notification.permission === "default") Notification.requestPermission(); } catch (e) {
+                this.log(`[Notification] Request permission failed: ${e.message}`, 'debug');
+            }
         },
 
         toggle() { this.root.style.display = this.root.style.display === 'none' ? 'flex' : 'none'; },
@@ -404,15 +462,17 @@
         shutdown() {
             if (!RUNTIME.running) return;
             RUNTIME.running = false;
-            this.log("Stopping script & cleaning up...", "warn");
+            this.log("[System] Stopping script & cleaning up...", "warn");
 
             for (const cleanupFn of RUNTIME.cleanups) {
-                try { cleanupFn(); } catch (e) {}
+                try { cleanupFn(); } catch (e) { this.log(`[Cleanup] ${e.message}`, 'debug'); }
             }
             RUNTIME.cleanups.clear();
 
             Patcher.clean();
             setTimeout(() => {
+                const styles = document.getElementById('claw-styles');
+                if (styles) styles.remove();
                 if (this.root?.parentElement) this.root.remove();
                 window.clawLock = false;
             }, 1000);
@@ -453,8 +513,8 @@
         },
 
         getTaskMetaLabel(task) {
-            if (task.pending) return 'Queued task';
-            if (task.failed) return 'Run aborted';
+            if (task.pending) return 'In Queue';
+            if (task.failed) return 'Aborted';
 
             const labels = {
                 WATCH_VIDEO: 'Video quest',
@@ -465,15 +525,6 @@
                 ACHIEVEMENT: 'Activity achievement'
             };
             return labels[task.type] ?? 'Quest progress';
-        },
-
-        getTaskStatusText(task) {
-            if (task.status === "CLAIMED") return "Claimed";
-            if (task.done) return "Done";
-            if (task.failed) return "Failed";
-            if (task.pending) return "Queued";
-            if (task.status === "RUNNING") return "Running";
-            return task.status ?? "Idle";
         },
 
         updateTask(id, data) {
@@ -488,13 +539,14 @@
             if (oldData && oldData.status === newData.status && oldData.removing === newData.removing && oldData.claimable === newData.claimable) {
                 const card = document.getElementById(`claw-task-${id}`);
                 if (card) {
-                    const pct = newData.pending ? 0 : Math.min(100, (newData.cur / newData.max) * 100).toFixed(1);
+                    const pct = newData.pending || newData.failed ? 0 : Math.min(100, (newData.cur / newData.max) * 100).toFixed(1);
 
                     const fill = card.querySelector('.progress-fill');
                     if (fill) fill.style.width = `${pct}%`;
 
+                    const unit = newData.type === 'ACHIEVEMENT' ? '' : 's';
                     const progressText = card.querySelector('.progress-text');
-                    if (progressText) progressText.innerText = `${Math.floor(newData.cur)} / ${newData.max}s`;
+                    if (progressText) progressText.textContent = `${Math.floor(newData.cur)} / ${newData.max}${unit}`;
 
                     return;
                 }
@@ -516,7 +568,7 @@
             console.log(`%c[CLAW] %c${msg}`, `color: ${CONFIG.THEME}; font-weight: bold;`, `color: ${colors[type] || colors.info}`);
             try {
                 const box = document.getElementById('claw-logs');
-                if (box) {
+                if (box && type !== 'debug') {
                     const el = document.createElement('div');
                     const ts = document.createElement('span');
                     const text = document.createElement('span');
@@ -546,13 +598,16 @@
             const body = document.getElementById('claw-body');
             if (!body) return;
 
+            // Только если это не процесс выбора квестов
+            if (body.querySelector('#claw-quest-list')) return;
+
             this.renderSummary();
             if (!this.tasks.size) {
-                body.innerHTML = this.getEmptyStateHTML('Queue', 'Standing by for quests', 'Waiting for the next eligible quest or manual reward action.');
+                body.innerHTML = this.getEmptyStateHTML('Queue', 'Waiting for tasks', 'Waiting for the next eligible quest or manual reward action.');
                 return;
             }
 
-            const sorted =[...this.tasks.entries()].sort((a, b) => {
+            const sorted = [...this.tasks.entries()].sort((a, b) => {
                 const ta = a[1], tb = b[1];
                 if (ta.done !== tb.done) return ta.done ? 1 : -1;
                 if (ta.failed !== tb.failed) return ta.failed ? 1 : -1;
@@ -566,7 +621,7 @@
             });
 
             body.innerHTML = sorted.map(([id, t]) => {
-                const pct = t.pending ? 0 : Math.min(100, (t.cur / t.max) * 100).toFixed(1);
+                const pct = t.pending || t.failed ? 0 : Math.min(100, (t.cur / t.max) * 100).toFixed(1);
                 let icon = ICONS.BOLT;
                 if (t.done) icon = ICONS.CHECK;
                 else if (t.failed) icon = ICONS.STOP;
@@ -576,12 +631,24 @@
                 else if (t.type?.includes('GAME')) icon = ICONS.GAME;
                 else if (t.type?.includes('STREAM')) icon = ICONS.STREAM;
 
-                const claimBtn = t.claimable ? `<button class="claim-btn" data-id="${t.questId}" type="button">CLAIM REWARD</button>` : '';
-                const statusText = this.getTaskStatusText(t);
+                let statusText = t.status === 'CLAIMED' ? 'CLAIMED' : t.done ? 'DONE' : t.status;
+                let progressLabel = this.getTaskMetaLabel(t);
+                const unit = t.type === 'ACHIEVEMENT' ? '' : 's';
+
+                let actionBtn = '';
+
+                if (t.claimable) {
+                    actionBtn = `<button class="claim-btn" data-id="${id}" type="button">CLAIM REWARD</button>`;
+                } else if (t.type === 'ACHIEVEMENT' && t.status === 'RUNNING' && t.actionRequired) {
+                    statusText = 'ACTION REQUIRED';
+                    progressLabel = 'Please, complete manually';
+                    actionBtn = `<button class="goto-btn" type="button">GO TO QUESTS</button>`;
+                }
+
                 const stateClass = t.done ? 'done' : t.failed ? 'failed' : t.pending ? 'pending' : 'active';
                 const removingClass = t.removing ? 'removing' : '';
 
-                return `<div id="claw-task-${id}" class="task-card ${stateClass} ${removingClass}"><div class="task-icon">${icon}</div><div class="task-info"><div class="task-top"><div class="task-name" title="${t.name}">${t.name}</div><div class="task-status">${statusText}</div></div><div class="task-meta"><span class="task-kind">${this.getTaskMetaLabel(t)}</span><span class="progress-text">${Math.floor(t.cur)} / ${t.max}s</span></div><div class="progress-track"><div class="progress-fill" style="width: ${pct}%"></div></div>${claimBtn}</div></div>`;
+                return `<div id="claw-task-${id}" class="task-card ${stateClass} ${removingClass}"><div class="task-icon">${icon}</div><div class="task-info"><div class="task-top"><div class="task-name" title="${t.name}">${t.name}</div><div class="task-status">${statusText}</div></div><div class="task-meta"><span class="task-kind">${progressLabel}</span><span class="progress-text">${Math.floor(t.cur)} / ${t.max}${unit}</span></div><div class="progress-track"><div class="progress-fill" style="width: ${pct}%"></div></div>${actionBtn}</div></div>`;
             }).join('');
         }
     };
@@ -621,29 +688,31 @@
                         const delay = (e.body?.retry_after ?? Math.pow(2, req.attempts)) * 1000;
                         const isGlobal = e.body?.global === true;
 
-                        Logger.log(`[${err.status}] Retry ${req.attempts}/${SYS.MAX_RETRIES} in ${(delay / 1000).toFixed(1)}s`, 'warn');
+                        Logger.log(`[Network] Retry ${req.attempts}/${SYS.MAX_RETRIES} in ${(delay / 1000).toFixed(1)}s (HTTP ${err.status})`, 'warn');
+
+                        const retryJitter = rnd(200, 800);
 
                         if (isGlobal) {
                             this.queue.unshift(req);
-                            await sleep(delay + 500);
+                            await sleep(delay + retryJitter);
                         } else {
                             setTimeout(() => {
                                 if (RUNTIME.running) {
                                     this.queue.push(req);
                                     this.process();
                                 }
-                            }, delay + 500);
+                            }, delay + retryJitter);
                         }
                     } else if (err.isClientError) {
-                        Logger.log(`[${err.status}] ${err.message}: ${req.url}`, 'debug');
+                        Logger.log(`[Network] HTTP ${err.status}: ${req.url}`, 'debug');
                         req.reject(e);
                     } else {
-                        Logger.log(`[Error] ${err.message}: ${req.url}`, 'err');
+                        Logger.log(`[Network] Request to ${req.url} failed: ${err.message}`, 'err');
                         req.reject(e);
                     }
                 }
 
-                await sleep(1500);
+                await sleep(rnd(1200, 1800));
             }
             this.processing = false;
         }
@@ -799,32 +868,40 @@
         failTask(q, t, reason) {
             const currentProgress = Logger.tasks.get(q.id)?.cur ?? 0;
             Logger.updateTask(q.id, { name: t.name, type: t.type, cur: currentProgress, max: t.target, status: "FAILED" });
-            Logger.log(`[Failed] ${t.name} aborted: ${reason}`, 'err');
+            Logger.log(`[Task] Aborted "${t.name}": ${reason}`, 'err');
             Tasks.skipped.add(q.id);
             setTimeout(() => Logger.removeTask(q.id), 2000);
         },
 
-        _videoSpeed(target) {
-            if (target <= 100) return 2;
-            if (target <= 300) return 3;
-            if (target <= 600) return 4;
-            return 5;
-        },
-
         async VIDEO(q, t, s) {
-            let cur = s.progress?.[t.keyName]?.value ?? s.progress?.[t.type]?.value ?? 0;
+            let cur = s?.progress?.[t.keyName]?.value ?? s?.progress?.[t.type]?.value ?? 0;
             let failCount = 0;
-            const speed = this._videoSpeed(t.target);
+
             Logger.updateTask(q.id, { name: t.name, type: "VIDEO", cur, max: t.target, status: "RUNNING" });
 
             const startTime = Date.now();
             let calls = 0;
 
+            if (cur === 0) {
+                await sleep(rnd(200, 350));
+                cur = 0.2 + (Math.random() * 0.05);
+                try {
+                    await Traffic.enqueue(`/quests/${q.id}/video-progress`, { timestamp: Number(cur.toFixed(6)) });
+                    calls++;
+                } catch(e) {Logger.log(`[Video] Initial ping failed: ${e.message}`, 'debug');}
+            }
+
             while (cur < t.target && RUNTIME.running) {
-                cur = Math.min(t.target, cur + speed);
+                const delayMs = rnd(7000, 9500);
+                await sleep(delayMs);
+
+                const elapsedSec = (delayMs / 1000) + (Math.random() * 0.02 - 0.01);
+                cur += elapsedSec;
+
+                const payloadTs = Number(Math.min(t.target, cur).toFixed(6));
 
                 try {
-                    const r = await Traffic.enqueue(`/quests/${q.id}/video-progress`, { timestamp: cur });
+                    const r = await Traffic.enqueue(`/quests/${q.id}/video-progress`, { timestamp: payloadTs });
                     calls++;
                     const serverVal = r?.body?.progress?.[t.keyName]?.value ?? r?.body?.progress?.WATCH_VIDEO?.value;
                     if (serverVal > cur) cur = Math.min(t.target, serverVal);
@@ -834,13 +911,13 @@
                     failCount++;
                     const err = ErrorHandler.classify(e);
                     if (err.isClientError) {
-                        Logger.log(`[VIDEO] Quest ${t.name} unavailable (${err.status}). Skipping.`, 'warn');
+                        Logger.log(`[Task] Video quest unavailable (HTTP ${err.status}). Skipping.`, 'warn');
                         return Tasks.failTask(q, t, `Client Error ${err.status}`);
                     }
                     if (failCount >= SYS.MAX_TASK_FAILURES) {
                         return Tasks.failTask(q, t, 'Too many network failures');
                     }
-                    Logger.log(`[VIDEO] Progress failed (${failCount}/${SYS.MAX_TASK_FAILURES}): ${err.message}`, 'debug');
+                    Logger.log(`[Task] VIDEO progress failed (${failCount}/${SYS.MAX_TASK_FAILURES}): ${err.message}`, 'debug');
                 }
 
                 Logger.updateTask(q.id, { name: t.name, type: "VIDEO", cur, max: t.target, status: "RUNNING" });
@@ -848,11 +925,9 @@
                 if (Date.now() - startTime > SYS.MAX_TIME) {
                     return Tasks.failTask(q, t, 'Timeout exceeded');
                 }
-
-                await sleep(1000);
             }
             if (RUNTIME.running) {
-                Logger.log(`[VIDEO] ${t.name} done in ${calls} API calls`, 'debug');
+                Logger.log(`[Task] VIDEO "${t.name}" done in ${calls} API calls`, 'debug');
                 Tasks.finish(q, t);
             }
         },
@@ -865,7 +940,7 @@
             const gameData = await this.fetchGameData(t.appId, t.name);
 
             return new Promise(resolve => {
-                const pid = rnd(10000, 50000);
+                const pid = rnd(2500, 12500) * 4;
                 const game = {
                     id: gameData.id, name: gameData.name, icon: gameData.icon,
                     pid, pidPath: [pid], processName: gameData.name, start: Date.now(),
@@ -891,14 +966,16 @@
                 }
 
                 Logger.updateTask(q.id, { name: t.name, type, cur: 0, max: t.target, status: "RUNNING" });
-                Logger.log(`[${type}] Started: ${gameData.name}`, 'debug');
+                Logger.log(`[Task] Started ${type}: ${gameData.name}`, 'info');
 
                 const finish = () => {
                     if (cleaned) return;
                     cleaned = true;
                     clearTimeout(safetyTimer);
-                    try { cleanupHook(); } catch (e) { Logger.log(`[Cleanup] ${e.message}`, 'debug'); }
-                    try { Mods.Dispatcher?.unsubscribe(CONST.EVT.HEARTBEAT, check); } catch (e) { }
+                    try { cleanupHook(); } catch (e) { Logger.log(`[Task] Cleanup: ${e.message}`, 'debug'); }
+                    try { Mods.Dispatcher?.unsubscribe(CONST.EVT.HEARTBEAT, check); } catch (e) {
+                        Logger.log(`[Dispatcher] Unsubscribe failed: ${e.message}`, 'debug');
+                    }
                     RUNTIME.cleanups.delete(finish);
                 };
 
@@ -929,7 +1006,52 @@
 
         async ACHIEVEMENT(q, t) {
             Logger.updateTask(q.id, { name: t.name, type: "ACHIEVEMENT", cur: 0, max: t.target, status: "RUNNING" });
-            Logger.log(`[ACHIEVEMENT] Waiting for: ${t.name} (join the Activity to earn it)`, 'info');
+
+            let chan = null;
+            try {
+                chan = Mods.ChanStore?.getSortedPrivateChannels()?.[0]?.id
+                    ?? Object.values(Mods.GuildChanStore?.getAllGuilds() ?? {}).find(g => g?.VOCAL?.length)?.VOCAL?.[0]?.channel?.id;
+            } catch (e) { Logger.log(`[Achievement] Channel lookup: ${e.message}`, 'debug'); }
+
+            if (chan) {
+                Logger.log(`[Task] Attempting heartbeat spoofing for "${t.name}"...`, 'info');
+                const key = `call:${chan}:${rnd(1000, 9999)}`;
+                let cur = 0;
+                let failCount = 0;
+
+                while (cur < t.target && RUNTIME.running) {
+                    try {
+                        const r = await Traffic.enqueue(`/quests/${q.id}/heartbeat`, { stream_key: key, terminal: false });
+                        cur = r?.body?.progress?.[t.keyName]?.value ?? r?.body?.progress?.ACHIEVEMENT_IN_ACTIVITY?.value ?? cur;
+                        Logger.updateTask(q.id, { name: t.name, type: "ACHIEVEMENT", cur, max: t.target, status: "RUNNING" });
+                        failCount = 0;
+
+                        if (cur >= t.target) {
+                            try { await Traffic.enqueue(`/quests/${q.id}/heartbeat`, { stream_key: key, terminal: true }); }
+                            catch (_) { }
+                            break;
+                        }
+                    } catch (e) {
+                        failCount++;
+                        const err = ErrorHandler.classify(e);
+                        if (err.isClientError) {
+                            Logger.log(`[Achievement] Heartbeat rejected (HTTP ${err.status}). Falling back to passive mode.`, 'warn');
+                            break;
+                        }
+                        if (failCount >= SYS.MAX_TASK_FAILURES) {
+                            Logger.log(`[Achievement] Too many failures. Falling back to passive mode.`, 'warn');
+                            break;
+                        }
+                    }
+                    await sleep(rnd(19000, 22000));
+                }
+
+                if (cur >= t.target && RUNTIME.running) return Tasks.finish(q, t);
+            }
+
+            if (!RUNTIME.running) return;
+            Logger.log(`[Task] Action required: Join Activity to earn "${t.name}"`, 'warn');
+            Logger.updateTask(q.id, { name: t.name, type: "ACHIEVEMENT", cur: 0, max: t.target, status: "RUNNING", actionRequired: true });
 
             return new Promise(resolve => {
                 let cleaned = false;
@@ -944,7 +1066,7 @@
                 };
 
                 safetyTimer = setTimeout(() => {
-                    if (RUNTIME.running) Tasks.failTask(q, t, 'Timeout - achievement not earned manually');
+                    if (RUNTIME.running) Tasks.failTask(q, t, 'Timeout - achievement not earned');
                     finish();
                     resolve();
                 }, SYS.MAX_TIME);
@@ -974,7 +1096,7 @@
                 chan = Mods.ChanStore?.getSortedPrivateChannels()?.[0]?.id
                     ?? Object.values(Mods.GuildChanStore?.getAllGuilds() ?? {}).find(g => g?.VOCAL?.length)?.VOCAL?.[0]?.channel?.id;
             } catch (e) {
-                Logger.log(`[ACTIVITY] Channel lookup error: ${e.message}`, 'debug');
+                Logger.log(`[Task] ACTIVITY channel lookup error: ${e.message}`, 'debug');
             }
 
             if (!chan) {
@@ -1003,26 +1125,26 @@
                     failCount++;
                     const err = ErrorHandler.classify(e);
                     if (err.isClientError) {
-                        Logger.log(`[ACTIVITY] Quest unavailable (${err.status}). Skipping.`, 'warn');
+                        Logger.log(`[Task] Activity quest unavailable (HTTP ${err.status}). Skipping.`, 'warn');
                         return Tasks.failTask(q, t, `Client Error ${err.status}`);
                     }
                     if (failCount >= SYS.MAX_TASK_FAILURES) {
                         return Tasks.failTask(q, t, 'Too many network failures');
                     }
-                    Logger.log(`[ACTIVITY] Heartbeat failed (${failCount}/${SYS.MAX_TASK_FAILURES}): ${err.message}`, 'debug');
+                    Logger.log(`[Task] ACTIVITY heartbeat failed (${failCount}/${SYS.MAX_TASK_FAILURES}): ${err.message}`, 'debug');
                 }
 
                 if (Date.now() - startTime > SYS.MAX_TIME) {
                     return Tasks.failTask(q, t, 'Timeout exceeded');
                 }
-                await sleep(20000);
+                await sleep(rnd(19000, 22000));
             }
             if (RUNTIME.running && cur >= t.target) Tasks.finish(q, t);
         },
 
         async finish(q, t) {
             Logger.updateTask(q.id, { name: t.name, type: t.type, cur: t.target, max: t.target, status: "COMPLETED" });
-            Logger.log(`[Completed] ${t.name}`, 'success');
+            Logger.log(`[Task] Completed "${t.name}"!`, 'success');
 
             try {
                 if (typeof Notification !== 'undefined' && Notification.permission === "granted") {
@@ -1032,10 +1154,13 @@
 
             if (CONFIG.TRY_TO_CLAIM_REWARD) {
                 try {
+                    await sleep(rnd(2500, 6000));
+                    if (!RUNTIME.running) return;
+
                     const claimRes = await this.claimReward(q.id);
 
                     if (claimRes?.body?.claimed_at) {
-                        Logger.log(`[Claim] ${t.name} reward claimed automatically!`, 'success');
+                        Logger.log(`[Claim] Reward for "${t.name}" claimed automatically!`, 'success');
                         Logger.updateTask(q.id, { name: t.name, type: t.type, cur: t.target, max: t.target, status: "CLAIMED" });
                         setTimeout(() => Logger.removeTask(q.id), 2000);
                         return;
@@ -1043,13 +1168,11 @@
                 } catch (e) {
                     const needsCaptcha = e?.body?.captcha_key || e?.body?.captcha_sitekey;
                     if (needsCaptcha) {
-                        Logger.log(`[Claim] ${t.name} needs captcha — use the CLAIM button`, 'warn');
+                        Logger.log(`[Claim] Captcha required for "${t.name}". Use UI button.`, 'warn');
                     } else {
-                        Logger.log(`[Claim] Auto-claim failed (${e?.status}): ${e?.body?.message ?? e?.message}`, 'debug');
+                        Logger.log(`[Claim] Auto-claim failed for "${t.name}": ${e?.body?.message ?? e?.message}`, 'err');
                     }
                 }
-            } else {
-                Logger.log(`[Claim] Auto-claim disabled. Waiting for manual action.`, 'info');
             }
 
             Logger.updateTask(q.id, { name: t.name, type: t.type, cur: t.target, max: t.target, status: "COMPLETED", claimable: true, questId: q.id });
@@ -1120,6 +1243,22 @@
                 return undefined;
             }
 
+            function findRouter() {
+                for (const m of modules) {
+                    try {
+                        const exp = m?.exports;
+                        if (!exp) continue;
+
+                        for (const prop of Object.values(exp)) {
+                            if (typeof prop === 'function' && prop.toString().includes('transitionTo -')) {
+                                return { transitionTo: prop };
+                            }
+                        }
+                    } catch { }
+                }
+                return undefined;
+            }
+
             const found = {
                 QuestStore:     findStore('QuestStore'),
                 RunStore:       findStore('RunningGameStore'),
@@ -1127,21 +1266,22 @@
                 ChanStore:      findStore('ChannelStore'),
                 GuildChanStore: findStore('GuildChannelStore'),
                 Dispatcher:     findDispatcher(),
-                API:            findAPI()
+                API:            findAPI(),
+                Router:         findRouter()
             };
 
             const required = ['QuestStore', 'API', 'Dispatcher', 'RunStore'];
             const missing = required.filter(k => !found[k]);
             if (missing.length > 0) throw new Error(`Core modules not found: ${missing.join(', ')}`);
 
-            const optional = ['StreamStore', 'ChanStore', 'GuildChanStore'];
-            optional.forEach(k => { if (!found[k]) Logger.log(`[Modules] ${k} not found - some features may be limited`, 'warn'); });
+            const optional = ['StreamStore', 'ChanStore', 'GuildChanStore', 'Router'];
+            optional.forEach(k => { if (!found[k]) Logger.log(`[System] Optional module '${k}' not found. Features may be limited.`, 'warn'); });
 
             Mods = found;
             Patcher.init(Mods.RunStore);
             return true;
         } catch (e) {
-            Logger.log(`[Modules] ${e.message ?? e}`, 'err');
+            Logger.log(`[System] Module loading error: ${e.message ?? e}`, 'err');
             console.error(e);
             return false;
         }
@@ -1156,7 +1296,7 @@
             const p = task().finally(() => executing.delete(p));
             executing.add(p);
 
-            await sleep(500);
+            await sleep(rnd(1500, 4000));
 
             if (executing.size >= limit) {
                 await Promise.race(executing);
@@ -1166,60 +1306,162 @@
         return Promise.allSettled(executing);
     }
 
+    const REWARD_META = { 1: { label: "In-Game Item", color: "var(--warn-bright)" }, 3: { label: "Avatar Decoration", color: "var(--accent-bright)" }, 4: { label: "Orbs", color: "var(--success-bright)" } };
+    const REWARD_FALLBACK = { label: "Other", color: "var(--text-tertiary)" };
+
+    function showQuestPicker(quests) {
+        return new Promise(resolve => {
+            const body = document.getElementById('claw-body');
+            const incomplete = quests.filter(q =>
+                !q.userStatus?.completedAt
+                && new Date(q.config?.expiresAt).getTime() > Date.now()
+                && q.id !== CONST.ID
+            );
+
+            if (!incomplete.length) return resolve({ selected: null, options: {} });
+
+            const items = incomplete.map(q => {
+                const cfg = q.config?.taskConfig ?? q.config?.taskConfigV2;
+                const td = cfg?.tasks ? Tasks.detectType(cfg, q.config?.application?.id) : null;
+                const rw = q.config?.rewardsConfig?.rewards?.[0];
+                return {
+                    id: q.id,
+                    name: q.config?.messages?.questName ?? "Unknown Quest",
+                    type: td ? (td.type === "WATCH_VIDEO" ? "VIDEO" : td.type) : "UNKNOWN",
+                    rt: rw?.type ?? 0,
+                    reward: rw?.messages?.name ?? "Unknown"
+                };
+            });
+
+            const rewardTypes = [...new Set(items.map(q => q.rt))].sort();
+            const meta = rt => REWARD_META[rt] ?? REWARD_FALLBACK;
+
+            body.innerHTML = `
+                <div style="padding: 6px 4px 0;">
+                    <div class="quest-pick-section">Filter by reward</div>
+                    <div class="quest-pick-filters">
+                        ${rewardTypes.map(rt => {
+                            const m = meta(rt);
+                            return `<button class="reward-filter" data-rt="${rt}" style="border-color:${m.color};color:${m.color};">${m.label} (${items.filter(q => q.rt === rt).length})</button>`;
+                        }).join('')}
+                    </div>
+                    <div id="claw-quest-list" style="max-height: 180px; overflow-y: auto; padding-right: 8px;">
+                        ${items.map(q => {
+                            const c = meta(q.rt).color;
+                            return `<label class="quest-pick" style="border-left-color:${c};" data-rt="${q.rt}">
+                                <input type="checkbox" checked data-qid="${q.id}">
+                                <div class="quest-pick-info">
+                                    <div class="quest-pick-name">${q.name}</div>
+                                    <div class="quest-pick-meta">
+                                        <span class="quest-pick-type">${q.type}</span>
+                                        <span class="quest-pick-reward" style="color:${c};">${q.reward}</span>
+                                    </div>
+                                </div>
+                            </label>`;
+                        }).join('')}
+                    </div>
+                    <div style="padding: 8px 0 2px;">
+                        <div class="quest-pick-section">Options</div>
+                        <div class="claw-option">
+                            <span class="claw-option-label">Auto-enroll in quests</span>
+                            <label class="claw-toggle"><input type="checkbox" id="opt-enroll" checked><span class="slider"></span></label>
+                        </div>
+                        <div class="claw-option">
+                            <span class="claw-option-label">Auto-claim rewards</span>
+                            <label class="claw-toggle"><input type="checkbox" id="opt-claim"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                    <div class="quest-pick-actions">
+                        <button class="quest-pick-btn toggle" id="claw-toggle-all">DESELECT ALL</button>
+                        <button class="quest-pick-btn start" id="claw-start-btn">${ICONS.BOLT} START (${items.length})</button>
+                    </div>
+                </div>
+            `;
+
+            const $ = sel => body.querySelector(sel);
+            const $$ = sel => body.querySelectorAll(sel);
+
+            const syncStartBtn = () => {
+                const n = $$('input[data-qid]:checked').length;
+                const btn = $('#claw-start-btn');
+                btn.innerHTML = `${ICONS.BOLT} START (${n})`;
+                btn.classList.toggle('disabled', n === 0);
+            };
+
+            $$('input[data-qid]').forEach(cb => cb.addEventListener('change', syncStartBtn));
+
+            const filters = Object.fromEntries(rewardTypes.map(rt => [rt, true]));
+            $$('.reward-filter').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const rt = Number(btn.dataset.rt);
+                    filters[rt] = !filters[rt];
+                    btn.classList.toggle('off', !filters[rt]);
+                    $$(`.quest-pick[data-rt="${rt}"]`).forEach(card => {
+                        card.classList.toggle('hidden', !filters[rt]);
+                        card.querySelector('input').checked = filters[rt];
+                    });
+                    syncStartBtn();
+                });
+            });
+
+            let allOn = true;
+            $('#claw-toggle-all').addEventListener('click', () => {
+                allOn = !allOn;
+                $$('.quest-pick').forEach(c => { c.classList.toggle('hidden', !allOn); c.querySelector('input').checked = allOn; });
+                $$('.reward-filter').forEach(b => { filters[Number(b.dataset.rt)] = allOn; b.classList.toggle('off', !allOn); });
+                $('#claw-toggle-all').textContent = allOn ? 'DESELECT ALL' : 'SELECT ALL';
+                syncStartBtn();
+            });
+
+            $('#claw-start-btn').addEventListener('click', () => {
+                const selected = new Set();
+                $$('input[data-qid]:checked').forEach(cb => selected.add(cb.dataset.qid));
+                const options = {
+                    autoEnroll: $('#opt-enroll').checked,
+                    autoClaim: $('#opt-claim').checked
+                };
+                body.innerHTML = Logger.getEmptyStateHTML('System', 'Starting up...', 'Preparing selected quests.');
+                resolve({ selected, options });
+            });
+        });
+    }
+
     async function main() {
         Logger.init();
         if (!loadModules()) return Logger.log('[System] Failed to load Discord modules. Aborting.', 'err');
+
+        const getQuests = () => {
+            const q = Mods.QuestStore.quests;
+            return q instanceof Map ? [...q.values()] : Object.values(q);
+        };
+
+        const { selected, options } = await showQuestPicker(getQuests());
+        if (!RUNTIME.running) return;
+
+        if (selected !== null) {
+            RUNTIME.selectedQuests = selected;
+            CONFIG.TRY_TO_CLAIM_REWARD = options.autoClaim;
+            RUNTIME.autoEnroll = options.autoEnroll;
+            Logger.log(`[System] ${selected.size} quest(s) selected. Auto-enroll: ${options.autoEnroll ? 'ON' : 'OFF'}, Auto-claim: ${options.autoClaim ? 'ON' : 'OFF'}`, 'info');
+        }
 
         let loopCount = 1;
 
         while (RUNTIME.running) {
             try {
-                Logger.log(`Starting Cycle #${loopCount}...`, 'info');
+                Logger.log(`[Cycle] Starting loop #${loopCount}...`, 'info');
 
-                const getQuests = () => {
-                    const q = Mods.QuestStore.quests;
-                    return q instanceof Map ? [...q.values()] : Object.values(q);
-                };
-
-                let quests = getQuests();
-
-                const incomplete = quests.filter(q =>
-                    !q.userStatus?.completedAt
-                    && new Date(q.config?.expiresAt).getTime() > Date.now()
-                    && q.id !== CONST.ID
-                    && !Tasks.skipped.has(q.id)
-                );
-
-                const toEnroll = incomplete.filter(q => !q.userStatus?.enrolledAt);
-
-                if (toEnroll.length > 0) {
-                    Logger.log(`Enrolling in ${toEnroll.length} new quests...`, 'warn');
-                    for (const q of toEnroll) {
-                        if (!RUNTIME.running) break;
-                        try {
-                            await Traffic.enqueue(`/quests/${q.id}/enroll`, { location: 1 });
-                        } catch (e) {
-                            const questName = q.config?.messages?.questName ?? q.id;
-                            if (ErrorHandler.isSkippableQuest(e)) {
-                                Tasks.skipped.add(q.id);
-                                Logger.log(`[Enroll] ${questName} unavailable (${e.status}). Added to skip list.`, 'warn');
-                            } else {
-                                Logger.log(`[Enroll] Failed for ${questName}: ${e?.message ?? e}`, 'err');
-                            }
-                        }
-                    }
-                    await sleep(1500);
-                    quests = getQuests();
-                }
+                const quests = getQuests();
 
                 const active = quests.filter(q =>
                     !q.userStatus?.completedAt
                     && new Date(q.config?.expiresAt).getTime() > Date.now()
                     && q.id !== CONST.ID
                     && !Tasks.skipped.has(q.id)
+                    && (!RUNTIME.selectedQuests || RUNTIME.selectedQuests.has(q.id))
                 );
 
-                if (!active.length) { Logger.log('All quests finished.', 'success'); break; }
+                if (!active.length) { Logger.log('[System] All available quests are completed!', 'success'); break; }
 
                 const queues = { video: [], game: [] };
 
@@ -1256,7 +1498,28 @@
 
                         Logger.updateTask(tInfo.id, { name: tInfo.name, type: tInfo.type, cur: 0, max: tInfo.target, status: "QUEUE" });
 
-                        const taskFunc = () => {
+                        const taskFunc = async () => {
+                            if (!q.userStatus?.enrolledAt) {
+                                if (RUNTIME.autoEnroll === false) {
+                                    Logger.log(`[Enroll] Skipped "${tInfo.name}" (auto-enroll disabled).`, 'debug');
+                                    return;
+                                }
+                                Logger.log(`[Enroll] Accepting quest: ${tInfo.name}`, 'info');
+                                try {
+                                    await Traffic.enqueue(`/quests/${q.id}/enroll`, { location: 11, is_targeted: false });
+                                    await sleep(rnd(800, 1500));
+                                } catch (e) {
+                                    const err = ErrorHandler.classify(e);
+                                    if (ErrorHandler.isSkippableQuest(e)) {
+                                        Tasks.skipped.add(q.id);
+                                        Logger.log(`[Enroll] ${tInfo.name} unavailable (${err.status}). Skipping.`, 'warn');
+                                    } else {
+                                        Logger.log(`[Enroll] Failed for ${tInfo.name}: ${err.message}`, 'err');
+                                    }
+                                    return Tasks.failTask(q, tInfo, `Enrollment failed`);
+                                }
+                            }
+
                             if (type === "WATCH_VIDEO") return Tasks.VIDEO(q, tInfo, q.userStatus);
                             if (type === "ACHIEVEMENT") return Tasks.ACHIEVEMENT(q, tInfo);
                             const runner = type === "STREAM" ? Tasks.STREAM : (type === "ACTIVITY" ? Tasks.ACTIVITY : Tasks.GAME);
@@ -1273,26 +1536,26 @@
                 const totalTasks = queues.video.length + queues.game.length;
 
                 if (totalTasks > 0) {
-                    Logger.log(`Processing: ${queues.video.length} videos, ${queues.game.length} games.`, 'info');
+                    Logger.log(`[Cycle] Processing: ${queues.video.length} videos, ${queues.game.length} games.`, 'info');
                     const pGames = runConcurrent(queues.game, CONFIG.GAME_CONCURRENCY);
                     const pVideos = runConcurrent(queues.video, CONFIG.VIDEO_CONCURRENCY);
                     await Promise.all([pGames, pVideos]);
                 } else {
-                    if (active.length === 0) { Logger.log('All quests finished.', 'success'); break; }
-                    else await sleep(5000);
+                    if (active.length === 0) { Logger.log('[System] All available quests are completed!', 'success'); break; }
+                    else await sleep(rnd(4000, 6000));
                 }
 
                 if (!RUNTIME.running) break;
-                Logger.log(`Cycle #${loopCount} complete. Rescanning...`, 'success');
-                await sleep(3000);
+                Logger.log(`[Cycle] Loop #${loopCount} complete. Waiting before rescan...`, 'info');
+                await sleep(rnd(2500, 4500));
                 loopCount++;
 
             } catch (cycleError) {
-                Logger.log(`[Cycle] Error in cycle #${loopCount}: ${cycleError?.message ?? cycleError}`, 'err');
+                Logger.log(`[Cycle] Error in loop #${loopCount}: ${cycleError?.message ?? cycleError}`, 'err');
                 console.error(cycleError);
                 await sleep(3000);
                 loopCount++;
-        }
+            }
         }
 
         Logger.shutdown();
@@ -1301,7 +1564,7 @@
     main().catch(e => {
         const msg = e?.message ?? e?.toString?.() ?? "Unknown fatal error";
         console.error('[Claw Fatal]', e);
-        try { Logger.log(`[FATAL] ${msg}`, 'err'); } catch (_) { }
+        try { Logger.log(`[System] FATAL: ${msg}`, 'err'); } catch (_) { }
         Logger.shutdown();
 
         setTimeout(() => { window.clawLock = false; }, 1500);
