@@ -195,7 +195,6 @@
                 #claw-ui ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.07); border-radius: 999px; }
                 #claw-ui ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.13); }
 
-                /* Empty states */
                 .claw-empty {
                     min-height: 184px; border: none; border-radius: 10px;
                     background: radial-gradient(ellipse at top right, rgba(113, 112, 255, 0.04), transparent 50%), var(--bg-panel);
@@ -206,7 +205,6 @@
                 .claw-empty-title { color: var(--text-primary); font-size: 18px; font-weight: 510; line-height: 1.2; letter-spacing: -0.01em; margin-bottom: 8px; }
                 .claw-empty-copy { color: var(--text-tertiary); font-size: 13px; line-height: 1.6; max-width: 280px; }
 
-                /* Task Cards */
                 .task-card {
                     display: flex; gap: 12px; padding: 14px; background: var(--bg-panel);
                     border-radius: 10px; margin-bottom: 10px; border: none;
@@ -255,7 +253,6 @@
                 .task-card.failed .progress-fill { background: linear-gradient(90deg, rgba(239, 68, 68, 0.85), rgba(239, 68, 68, 0.50)); box-shadow: none; }
                 .task-card.pending .progress-fill { background: linear-gradient(90deg, rgba(245, 158, 11, 0.60), rgba(245, 158, 11, 0.30)); box-shadow: none; }
 
-                /* Buttons */
                 .claim-btn {
                     width: 100%; margin-top: 10px; padding: 8px 14px; border-radius: var(--radius-pill);
                     border: none; background: rgba(16, 185, 129, 0.12); color: #d1fae5; font-size: 11px; font-weight: 510;
@@ -273,7 +270,6 @@
                 }
                 .goto-btn:hover { background: rgba(113, 112, 255, 0.25); }
 
-                /* Quest Picker Menu */
                 .quest-pick {
                     display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg-surface);
                     border-radius: var(--radius-md); margin-bottom: 8px; cursor: pointer; transition: background 0.15s ease, box-shadow 0.15s ease;
@@ -316,7 +312,6 @@
                 .claw-toggle input:checked + .slider { background: var(--success); border-color: var(--success); }
                 .claw-toggle input:checked + .slider::before { transform: translateX(16px); background: #fff; }
 
-                /* Logs */
                 #claw-logs-wrap { border-top: 1px solid var(--border-subtle); background: rgba(0, 0, 0, 0.12); }
                 #claw-logs-head {
                     display: flex; justify-content: space-between; align-items: center; gap: 10px;
@@ -545,7 +540,7 @@
                     if (fill) fill.style.width = `${pct}%`;
 
                     const unit = newData.type === 'ACHIEVEMENT' ? '' : 's';
-                    const progressText = card.querySelector('.progress-text');
+                    const progressText = card.querySelector('.progress-text') || card.querySelectorAll('.task-meta span')[1];
                     if (progressText) progressText.textContent = `${Math.floor(newData.cur)} / ${newData.max}${unit}`;
 
                     return;
@@ -598,7 +593,6 @@
             const body = document.getElementById('claw-body');
             if (!body) return;
 
-            // Только если это не процесс выбора квестов
             if (body.querySelector('#claw-quest-list')) return;
 
             this.renderSummary();
@@ -1379,7 +1373,7 @@
             `;
 
             const $ = sel => body.querySelector(sel);
-            const $$ = sel => body.querySelectorAll(sel);
+            const $$ = sel => [...body.querySelectorAll(sel)];
 
             const syncStartBtn = () => {
                 const n = $$('input[data-qid]:checked').length;
@@ -1388,7 +1382,13 @@
                 btn.classList.toggle('disabled', n === 0);
             };
 
-            $$('input[data-qid]').forEach(cb => cb.addEventListener('change', syncStartBtn));
+            const syncToggleLabel = () => {
+                const visible = $$('.quest-pick:not(.hidden)');
+                const allChecked = visible.length > 0 && visible.every(c => c.querySelector('input').checked);
+                $('#claw-toggle-all').textContent = allChecked ? 'DESELECT ALL' : 'SELECT ALL';
+            };
+
+            $$('input[data-qid]').forEach(cb => cb.addEventListener('change', () => { syncStartBtn(); syncToggleLabel(); }));
 
             const filters = Object.fromEntries(rewardTypes.map(rt => [rt, true]));
             $$('.reward-filter').forEach(btn => {
@@ -1401,15 +1401,15 @@
                         card.querySelector('input').checked = filters[rt];
                     });
                     syncStartBtn();
+                    syncToggleLabel();
                 });
             });
 
-            let allOn = true;
             $('#claw-toggle-all').addEventListener('click', () => {
-                allOn = !allOn;
-                $$('.quest-pick').forEach(c => { c.classList.toggle('hidden', !allOn); c.querySelector('input').checked = allOn; });
-                $$('.reward-filter').forEach(b => { filters[Number(b.dataset.rt)] = allOn; b.classList.toggle('off', !allOn); });
-                $('#claw-toggle-all').textContent = allOn ? 'DESELECT ALL' : 'SELECT ALL';
+                const visible = $$('.quest-pick:not(.hidden)');
+                const allChecked = visible.length > 0 && visible.every(c => c.querySelector('input').checked);
+                visible.forEach(c => { c.querySelector('input').checked = !allChecked; });
+                syncToggleLabel();
                 syncStartBtn();
             });
 
