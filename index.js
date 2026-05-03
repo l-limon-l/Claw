@@ -1,20 +1,21 @@
 (async () => {
     "use strict";
 
+    /* ── config (Safe for users to edit) ────────────────────────── */
     const CONFIG = {
         NAME: "Claw",
-        VERSION: "v4.6",
+        VERSION: "v4.6 (Enterprise Core)",
         THEME: "#7170ff",
         SUCCESS: "#10b981",
         WARN: "#f59e0b",
         ERR: "#ef4444",
-        TRY_TO_CLAIM_REWARD: false,
         HIDE_ACTIVITY: false,
-        GAME_CONCURRENCY: 1,
-        VIDEO_CONCURRENCY: 2,
+        GAME_CONCURRENCY: 1,            // from Claw
+        VIDEO_CONCURRENCY: 2,           // from Claw
         MAX_LOG_ITEMS: 60
     };
 
+    /* ── internal system limits (DO NOT EDIT) ─────────────────── */
     const SYS = Object.freeze({
         MAX_TIME: 25 * 60 * 1000,
         MAX_TASK_FAILURES: 5,
@@ -25,7 +26,39 @@
         running: true,
         cleanups: new Set(),
         selectedQuests: null,
-        autoEnroll: true
+        autoEnroll: true,
+        autoClaim: false,
+        playSound: false
+    };
+
+    /* ── audio cue (from Orion) ──────────────────────────────────── */
+    const Sound = {
+        play(type) {
+            if (!RUNTIME.playSound) return;
+            try {
+                const Ctx = window.AudioContext || window.webkitAudioContext;
+                if (!Ctx) return;
+                const ctx = new Ctx();
+                const o = ctx.createOscillator();
+                const g = ctx.createGain();
+                o.connect(g); g.connect(ctx.destination);
+                o.type = 'sine';
+                const t0 = ctx.currentTime;
+                if (type === 'done') {
+                    o.frequency.setValueAtTime(523.25, t0);
+                    o.frequency.setValueAtTime(659.25, t0 + 0.12);
+                    o.frequency.setValueAtTime(783.99, t0 + 0.24);
+                    g.gain.setValueAtTime(0.18, t0);
+                    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.55);
+                    o.start(t0); o.stop(t0 + 0.6);
+                } else {
+                    o.frequency.value = 880; 
+                    g.gain.setValueAtTime(0.12, t0);
+                    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.18);
+                    o.start(t0); o.stop(t0 + 0.2);
+                }
+            } catch (_) { /* audio unavailable, ignore */ }
+        }
     };
 
     const ICONS = Object.freeze({
@@ -259,8 +292,10 @@
                     letter-spacing: 0.3px; cursor: pointer; transition: background 0.15s ease;
                     box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.28); text-transform: uppercase;
                 }
-                .claim-btn:hover { background: rgba(16, 185, 129, 0.18); }
-                .claim-btn:active { background: rgba(16, 185, 129, 0.22); }
+                .claim-btn:hover:not(:disabled) { background: rgba(16, 185, 129, 0.18); }
+                .claim-btn:active:not(:disabled) { background: rgba(16, 185, 129, 0.22); }
+                .claim-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+                .claim-btn.failed { background: rgba(239, 68, 68, 0.12); color: #fecaca; box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.28); }
 
                 .goto-btn {
                     width: 100%; margin-top: 10px; padding: 8px 14px; border-radius: var(--radius-pill);
@@ -374,7 +409,7 @@
                     <div id="claw-logs-head"><span>Activity Log</span><span id="claw-log-meta">live console</span></div>
                     <div id="claw-logs"></div>
                 </div>
-                <div id="claw-footer"><strong>Built by</strong> <a href="https://e-z.bio/l_limon_l" target="_blank" class="dev-btn">l_limon_l</a> | <a href="https://fakecrime.bio/l_limon_l" target="_blank" class="dev-btn">More info</a></div>
+                <div id="claw-footer"><strong>Built by</strong> <a href="https://fakecrime.bio/l_limon_l" target="_blank" class="dev-btn">l_limon_l</a> | <a href="https://e-z.bio/l_limon_l" target="_blank" class="dev-btn">More info</a></div>
             `;
             document.body.appendChild(this.root);
 
@@ -408,21 +443,22 @@
 
             document.getElementById('claw-body').addEventListener('click', async (e) => {
                 if (e.target.classList.contains('goto-btn')) {
-                    if (Mods.Router) {
-                        Mods.Router.transitionTo('/quest-home');
-                    }
+                    if (Mods.Router) Mods.Router.transitionTo('/quest-home');
                     return;
                 }
 
                 const btn = e.target.closest?.('.claim-btn');
-                if (!btn) return;
+                if (!btn || btn.disabled) return;
 
                 const questId = btn.getAttribute('data-id');
                 const taskData = this.tasks.get(questId);
+                if (!taskData) return;
 
                 btn.innerText = "WAITING...";
-                btn.style.opacity = "0.5";
-                btn.style.pointerEvents = "none";
+                btn.disabled = true;
+                
+                // save state from Orion
+                this.updateTask(questId, { ...taskData, claimState: 'WAITING' });
 
                 try {
                     const claimRes = await Tasks.claimReward(questId);
@@ -430,16 +466,14 @@
                     if (claimRes?.body?.claimed_at) {
                         btn.innerText = "CLAIMED!";
                         btn.style.background = CONFIG.SUCCESS;
-                        this.log(`[Claim] Reward for "${taskData?.name || 'Quest'}" claimed successfully!`, 'success');
+                        this.log(`[Claim] Reward for "${taskData.name}" claimed successfully!`, 'success');
 
-                        this.updateTask(questId, { ...taskData, status: "CLAIMED", claimable: false });
+                        this.updateTask(questId, { ...taskData, status: "CLAIMED", claimable: false, claimState: null });
                         setTimeout(() => this.removeTask(questId), 2000);
                     }
                 } catch (err) {
-                    btn.innerText = "CLAIM REWARD";
-                    btn.style.opacity = "1";
-                    btn.style.pointerEvents = "auto";
-                    this.log(`[Claim] Action required for "${taskData?.name || 'Quest'}". Check Discord UI for captcha.`, 'warn');
+                    this.log(`[Claim] Action required for "${taskData.name}". Check Discord UI for captcha.`, 'warn');
+                    this.updateTask(questId, { ...taskData, claimState: 'FAILED' });
                 }
             });
 
@@ -531,7 +565,9 @@
             const newData = { ...oldData, ...data, done: isDone, pending: isPending, failed: isFailed };
             this.tasks.set(id, newData);
 
-            if (oldData && oldData.status === newData.status && oldData.removing === newData.removing && oldData.claimable === newData.claimable) {
+            if (oldData && oldData.status === newData.status && oldData.removing === newData.removing && 
+                oldData.claimable === newData.claimable && oldData.claimState === newData.claimState &&
+                oldData.actionRequired === newData.actionRequired) {
                 const card = document.getElementById(`claw-task-${id}`);
                 if (card) {
                     const pct = newData.pending || newData.failed ? 0 : Math.min(100, (newData.cur / newData.max) * 100).toFixed(1);
@@ -572,12 +608,7 @@
                     ts.className = 'log-ts';
                     text.className = 'log-text';
 
-                    ts.textContent = new Date().toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                        hour12: false
-                    });
+                    ts.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
                     text.textContent = msg;
 
                     el.appendChild(ts);
@@ -592,7 +623,6 @@
         render() {
             const body = document.getElementById('claw-body');
             if (!body) return;
-
             if (body.querySelector('#claw-quest-list')) return;
 
             this.renderSummary();
@@ -632,7 +662,13 @@
                 let actionBtn = '';
 
                 if (t.claimable) {
-                    actionBtn = `<button class="claim-btn" data-id="${id}" type="button">CLAIM REWARD</button>`;
+                    if (t.claimState === 'WAITING') actionBtn = `<button class="claim-btn" disabled>WAITING...</button>`;
+                    else if (t.claimState === 'FAILED') actionBtn = `<button class="claim-btn failed" disabled>ACTION REQUIRED</button>`;
+                    else actionBtn = `<button class="claim-btn" data-id="${id}" type="button">CLAIM REWARD</button>`;
+                } else if (t.actionRequired === 'ENROLL') {
+                    statusText = 'ACTION REQUIRED';
+                    progressLabel = 'Accept quest in Discord';
+                    actionBtn = `<button class="goto-btn" type="button">GO TO QUESTS</button>`;
                 } else if (t.type === 'ACHIEVEMENT' && t.status === 'RUNNING' && t.actionRequired) {
                     statusText = 'ACTION REQUIRED';
                     progressLabel = 'Please, complete manually';
@@ -1139,6 +1175,7 @@
         async finish(q, t) {
             Logger.updateTask(q.id, { name: t.name, type: t.type, cur: t.target, max: t.target, status: "COMPLETED" });
             Logger.log(`[Task] Completed "${t.name}"!`, 'success');
+            Sound.play('tick');
 
             try {
                 if (typeof Notification !== 'undefined' && Notification.permission === "granted") {
@@ -1146,7 +1183,7 @@
                 }
             } catch (e) { Logger.log(`[Notification] ${e.message}`, 'debug'); }
 
-            if (CONFIG.TRY_TO_CLAIM_REWARD) {
+            if (RUNTIME.autoClaim) {
                 try {
                     await sleep(rnd(2500, 6000));
                     if (!RUNTIME.running) return;
@@ -1173,13 +1210,59 @@
         }
     };
 
+    /* ── webpack module extraction (Orion Sentry Dodge / Vencord) ── */
     function loadModules() {
         try {
-            if (typeof webpackChunkdiscord_app === 'undefined') {
-                throw new Error("Webpack chunk not found - is this running inside Discord?");
+            if (typeof window.Vencord !== 'undefined' && window.Vencord.Webpack) {
+                Logger.log('[System] Vencord detected. Using Vencord Webpack API...', 'info');
+                const W = window.Vencord.Webpack;
+
+                let routerModule;
+                try {
+                    const m = W.findByCode('transitionTo -');
+                    if (m) {
+                        for (const prop of [m, m.default, ...Object.values(m)]) {
+                            if (typeof prop === 'function' && prop.toString().includes('transitionTo -')) {
+                                routerModule = { transitionTo: prop };
+                                break;
+                            }
+                        }
+                    }
+                } catch (e) { }
+
+                Mods = {
+                    QuestStore: W.findStore('QuestStore') || W.findStore('QuestsStore'),
+                    RunStore: W.findStore('RunningGameStore'),
+                    StreamStore: W.findStore('ApplicationStreamingStore'),
+                    ChanStore: W.findStore('ChannelStore'),
+                    GuildChanStore: W.findStore('GuildChannelStore'),
+                    Dispatcher: W.Common?.FluxDispatcher || W.findByProps('dispatch', 'subscribe', 'flushWaitQueue'),
+                    API: W.Common?.RestAPI || W.findByProps('get', 'post', 'del'),
+                    Router: routerModule
+                };
+
+                const required = ['QuestStore', 'API', 'Dispatcher', 'RunStore'];
+                const missing = required.filter(k => !Mods[k]);
+                
+                if (missing.length === 0) {
+                    Patcher.init(Mods.RunStore);
+                    return true;
+                }
+                Logger.log(`[System] Vencord extraction missed: ${missing.join(', ')}. Falling back to native...`, 'warn');
             }
 
-            const req = webpackChunkdiscord_app.push([[Symbol()], {}, r => r]); webpackChunkdiscord_app.pop();
+            if (typeof webpackChunkdiscord_app === 'undefined') throw new Error("Webpack chunk not found");
+
+            let req;
+            webpackChunkdiscord_app.push([[Symbol()], {}, (r) => {
+                const cur = Object.keys(req?.c || {}).length;
+                const incoming = Object.keys(r?.c || {}).length;
+                if (incoming > cur) req = r;
+            }]);
+            webpackChunkdiscord_app.pop();
+
+            if (!req?.c) throw new Error("Module registry not available");
+
             const modules = Object.values(req.c);
 
             function findStore(storeName) {
@@ -1189,8 +1272,7 @@
                         if (!exp || typeof exp !== 'object') continue;
                         for (const key of Object.keys(exp)) {
                             const prop = exp[key];
-                            if (prop && typeof prop === 'object'
-                                && prop.__proto__?.constructor?.displayName === storeName) {
+                            if (prop && typeof prop === 'object' && prop.__proto__?.constructor?.displayName === storeName) {
                                 return prop;
                             }
                         }
@@ -1206,10 +1288,7 @@
                         if (!exp || typeof exp !== 'object') continue;
                         for (const key of Object.keys(exp)) {
                             const prop = exp[key];
-                            if (prop && prop._subscriptions
-                                && typeof prop.subscribe === 'function'
-                                && typeof prop.dispatch === 'function'
-                                && typeof prop.__proto__?.flushWaitQueue === 'function') {
+                            if (prop && prop._subscriptions && typeof prop.subscribe === 'function' && typeof prop.dispatch === 'function' && typeof prop.__proto__?.flushWaitQueue === 'function') {
                                 return prop;
                             }
                         }
@@ -1225,10 +1304,7 @@
                         if (!exp || typeof exp !== 'object') continue;
                         for (const key of Object.keys(exp)) {
                             const prop = exp[key];
-                            if (prop && typeof prop.get === 'function'
-                                && typeof prop.post === 'function'
-                                && typeof prop.del === 'function'
-                                && !prop._dispatcher) {
+                            if (prop && typeof prop.get === 'function' && typeof prop.post === 'function' && typeof prop.del === 'function' && !prop._dispatcher) {
                                 return prop;
                             }
                         }
@@ -1243,7 +1319,7 @@
                         const exp = m?.exports;
                         if (!exp) continue;
 
-                        for (const prop of Object.values(exp)) {
+                        for (const prop of [exp, exp.default, ...Object.values(exp)]) {
                             if (typeof prop === 'function' && prop.toString().includes('transitionTo -')) {
                                 return { transitionTo: prop };
                             }
@@ -1253,50 +1329,38 @@
                 return undefined;
             }
 
-            const found = {
-                QuestStore:     findStore('QuestStore'),
-                RunStore:       findStore('RunningGameStore'),
-                StreamStore:    findStore('ApplicationStreamingStore'),
-                ChanStore:      findStore('ChannelStore'),
+            Mods = {
+                QuestStore: findStore('QuestStore'),
+                RunStore: findStore('RunningGameStore'),
+                StreamStore: findStore('ApplicationStreamingStore'),
+                ChanStore: findStore('ChannelStore'),
                 GuildChanStore: findStore('GuildChannelStore'),
-                Dispatcher:     findDispatcher(),
-                API:            findAPI(),
-                Router:         findRouter()
+                Dispatcher: findDispatcher(),
+                API: findAPI(),
+                Router: findRouter()
             };
 
             const required = ['QuestStore', 'API', 'Dispatcher', 'RunStore'];
-            const missing = required.filter(k => !found[k]);
+            const missing = required.filter(k => !Mods[k]);
             if (missing.length > 0) throw new Error(`Core modules not found: ${missing.join(', ')}`);
 
-            const optional = ['StreamStore', 'ChanStore', 'GuildChanStore', 'Router'];
-            optional.forEach(k => { if (!found[k]) Logger.log(`[System] Optional module '${k}' not found. Features may be limited.`, 'warn'); });
-
-            Mods = found;
             Patcher.init(Mods.RunStore);
             return true;
         } catch (e) {
             Logger.log(`[System] Module loading error: ${e.message ?? e}`, 'err');
-            console.error(e);
             return false;
         }
     }
 
     async function runConcurrent(tasks, limit) {
         const executing = new Set();
-
         for (const task of tasks) {
             if (!RUNTIME.running) break;
-
             const p = task().finally(() => executing.delete(p));
             executing.add(p);
-
             await sleep(rnd(1500, 4000));
-
-            if (executing.size >= limit) {
-                await Promise.race(executing);
-            }
+            if (executing.size >= limit) await Promise.race(executing);
         }
-
         return Promise.allSettled(executing);
     }
 
@@ -1310,6 +1374,7 @@
                 !q.userStatus?.completedAt
                 && new Date(q.config?.expiresAt).getTime() > Date.now()
                 && q.id !== CONST.ID
+                && !Tasks.skipped.has(q.id)
             );
 
             if (!incomplete.length) return resolve({ selected: null, options: {} });
@@ -1339,7 +1404,7 @@
                             return `<button class="reward-filter" data-rt="${rt}" style="border-color:${m.color};color:${m.color};">${m.label} (${items.filter(q => q.rt === rt).length})</button>`;
                         }).join('')}
                     </div>
-                    <div id="claw-quest-list" style="max-height: 180px; overflow-y: auto; padding-right: 8px;">
+                    <div id="claw-quest-list" style="max-height: 160px; overflow-y: auto; padding-right: 8px;">
                         ${items.map(q => {
                             const c = meta(q.rt).color;
                             return `<label class="quest-pick" style="border-left-color:${c};" data-rt="${q.rt}">
@@ -1363,6 +1428,10 @@
                         <div class="claw-option">
                             <span class="claw-option-label">Auto-claim rewards</span>
                             <label class="claw-toggle"><input type="checkbox" id="opt-claim"><span class="slider"></span></label>
+                        </div>
+                        <div class="claw-option">
+                            <span class="claw-option-label">Sound on quest completion</span>
+                            <label class="claw-toggle"><input type="checkbox" id="opt-sound"><span class="slider"></span></label>
                         </div>
                     </div>
                     <div class="quest-pick-actions">
@@ -1418,7 +1487,8 @@
                 $$('input[data-qid]:checked').forEach(cb => selected.add(cb.dataset.qid));
                 const options = {
                     autoEnroll: $('#opt-enroll').checked,
-                    autoClaim: $('#opt-claim').checked
+                    autoClaim: $('#opt-claim').checked,
+                    playSound: $('#opt-sound').checked
                 };
                 body.innerHTML = Logger.getEmptyStateHTML('System', 'Starting up...', 'Preparing selected quests.');
                 resolve({ selected, options });
@@ -1440,8 +1510,9 @@
 
         if (selected !== null) {
             RUNTIME.selectedQuests = selected;
-            CONFIG.TRY_TO_CLAIM_REWARD = options.autoClaim;
             RUNTIME.autoEnroll = options.autoEnroll;
+            RUNTIME.autoClaim = options.autoClaim;
+            RUNTIME.playSound = options.playSound;
             Logger.log(`[System] ${selected.size} quest(s) selected. Auto-enroll: ${options.autoEnroll ? 'ON' : 'OFF'}, Auto-claim: ${options.autoClaim ? 'ON' : 'OFF'}`, 'info');
         }
 
@@ -1461,7 +1532,7 @@
                     && (!RUNTIME.selectedQuests || RUNTIME.selectedQuests.has(q.id))
                 );
 
-                if (!active.length) { Logger.log('[System] All available quests are completed!', 'success'); break; }
+                if (!active.length) { Logger.log('[System] All available quests are completed!', 'success'); Sound.play('done'); break; }
 
                 const queues = { video: [], game: [] };
 
@@ -1474,36 +1545,24 @@
                         }
 
                         const typeData = Tasks.detectType(cfg, q.config?.application?.id);
-                        if (!typeData) {
-                            Logger.log(`[Quest] Unknown task type: ${q.config?.messages?.questName ?? q.id}`, 'warn');
-                            return;
-                        }
+                        if (!typeData) return;
 
                         const { type, keyName, target } = typeData;
-                        if (target <= 0) {
-                            Logger.log(`[Quest] Invalid target (${target}) for ${q.id}. Skipping.`, 'warn');
-                            return;
-                        }
+                        if (target <= 0) return;
 
-                        const tInfo = {
-                            id: q.id,
-                            appId: q.config?.application?.id ?? 0,
-                            name: q.config?.messages?.questName ?? "Unknown Quest",
-                            target,
-                            type,
-                            keyName
-                        };
+                        const tInfo = { id: q.id, appId: q.config?.application?.id ?? 0, name: q.config?.messages?.questName ?? "Unknown Quest", target, type, keyName };
+
+                        if (!q.userStatus?.enrolledAt && !RUNTIME.autoEnroll) {
+                            Logger.updateTask(tInfo.id, { name: tInfo.name, type: tInfo.type, cur: 0, max: tInfo.target, status: "PENDING", actionRequired: 'ENROLL' });
+                            return; 
+                        }
 
                         if (Logger.tasks.has(q.id) && Logger.tasks.get(q.id).status === "RUNNING") return;
 
-                        Logger.updateTask(tInfo.id, { name: tInfo.name, type: tInfo.type, cur: 0, max: tInfo.target, status: "QUEUE" });
+                        Logger.updateTask(tInfo.id, { name: tInfo.name, type: tInfo.type, cur: 0, max: tInfo.target, status: "QUEUE", actionRequired: null });
 
                         const taskFunc = async () => {
                             if (!q.userStatus?.enrolledAt) {
-                                if (RUNTIME.autoEnroll === false) {
-                                    Logger.log(`[Enroll] Skipped "${tInfo.name}" (auto-enroll disabled).`, 'debug');
-                                    return;
-                                }
                                 Logger.log(`[Enroll] Accepting quest: ${tInfo.name}`, 'info');
                                 try {
                                     await Traffic.enqueue(`/quests/${q.id}/enroll`, { location: 11, is_targeted: false });
@@ -1541,7 +1600,7 @@
                     const pVideos = runConcurrent(queues.video, CONFIG.VIDEO_CONCURRENCY);
                     await Promise.all([pGames, pVideos]);
                 } else {
-                    if (active.length === 0) { Logger.log('[System] All available quests are completed!', 'success'); break; }
+                    if (active.length === 0) { Logger.log('[System] All available quests are completed!', 'success'); Sound.play('done'); break; }
                     else await sleep(rnd(4000, 6000));
                 }
 
@@ -1552,7 +1611,6 @@
 
             } catch (cycleError) {
                 Logger.log(`[Cycle] Error in loop #${loopCount}: ${cycleError?.message ?? cycleError}`, 'err');
-                console.error(cycleError);
                 await sleep(3000);
                 loopCount++;
             }
@@ -1566,7 +1624,6 @@
         console.error('[Claw Fatal]', e);
         try { Logger.log(`[System] FATAL: ${msg}`, 'err'); } catch (_) { }
         Logger.shutdown();
-
         setTimeout(() => { window.clawLock = false; }, 1500);
     });
 })();
