@@ -4,14 +4,14 @@
     /* ── config (Safe for users to edit) ────────────────────────── */
     const CONFIG = {
         NAME: "Claw",
-        VERSION: "v4.6 (Enterprise Core)",
+        VERSION: "v4.6.3 (Enterprise Core)",
         THEME: "#7170ff",
         SUCCESS: "#10b981",
         WARN: "#f59e0b",
         ERR: "#ef4444",
         HIDE_ACTIVITY: false,
-        GAME_CONCURRENCY: 1,            // from Claw
-        VIDEO_CONCURRENCY: 2,           // from Claw
+        GAME_CONCURRENCY: 1,            
+        VIDEO_CONCURRENCY: 2,           
         MAX_LOG_ITEMS: 60
     };
 
@@ -19,7 +19,8 @@
     const SYS = Object.freeze({
         MAX_TIME: 25 * 60 * 1000,
         MAX_TASK_FAILURES: 5,
-        MAX_RETRIES: 3
+        MAX_RETRIES: 3,
+        IS_DESKTOP: typeof window.DiscordNative !== 'undefined'
     });
 
     const RUNTIME = {
@@ -31,7 +32,7 @@
         playSound: false
     };
 
-    /* ── audio cue (from Orion) ──────────────────────────────────── */
+    /* ── audio cue ───────────────────────────────────────────────── */
     const Sound = {
         play(type) {
             if (!RUNTIME.playSound) return;
@@ -48,16 +49,16 @@
                     o.frequency.setValueAtTime(523.25, t0);
                     o.frequency.setValueAtTime(659.25, t0 + 0.12);
                     o.frequency.setValueAtTime(783.99, t0 + 0.24);
-                    g.gain.setValueAtTime(0.18, t0);
+                    g.gain.setValueAtTime(0.55, t0);
                     g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.55);
                     o.start(t0); o.stop(t0 + 0.6);
                 } else {
                     o.frequency.value = 880; 
-                    g.gain.setValueAtTime(0.12, t0);
+                    g.gain.setValueAtTime(0.45, t0);
                     g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.18);
                     o.start(t0); o.stop(t0 + 0.2);
                 }
-            } catch (_) { /* audio unavailable, ignore */ }
+            } catch (_) { }
         }
     };
 
@@ -123,7 +124,7 @@
     };
 
     const Logger = {
-        root: null, tasks: new Map(),
+        root: null, tasks: new Map(), tickerId: null,
 
         init() {
             const oldUI = document.getElementById('claw-ui'); if (oldUI) oldUI.remove();
@@ -457,7 +458,6 @@
                 btn.innerText = "WAITING...";
                 btn.disabled = true;
                 
-                // save state from Orion
                 this.updateTask(questId, { ...taskData, claimState: 'WAITING' });
 
                 try {
@@ -484,6 +484,8 @@
             try { if (Notification.permission === "default") Notification.requestPermission(); } catch (e) {
                 this.log(`[Notification] Request permission failed: ${e.message}`, 'debug');
             }
+
+            this.startTicker();
         },
 
         toggle() { this.root.style.display = this.root.style.display === 'none' ? 'flex' : 'none'; },
@@ -492,6 +494,8 @@
             if (!RUNTIME.running) return;
             RUNTIME.running = false;
             this.log("[System] Stopping script & cleaning up...", "warn");
+
+            if (this.tickerId) clearInterval(this.tickerId);
 
             for (const cleanupFn of RUNTIME.cleanups) {
                 try { cleanupFn(); } catch (e) { this.log(`[Cleanup] ${e.message}`, 'debug'); }
@@ -504,6 +508,25 @@
                 if (styles) styles.remove();
                 if (this.root?.parentElement) this.root.remove();
                 window.clawLock = false;
+            }, 1000);
+        },
+
+        _getPct(t) {
+            if (t.done) return 100;
+            if (t.pending || t.failed || !t.max) return 0;
+            return Math.min(100, (t.cur / t.max) * 100);
+        },
+
+        startTicker() {
+            if (this.tickerId) clearInterval(this.tickerId);
+            this.tickerId = setInterval(() => {
+                if (!RUNTIME.running) return clearInterval(this.tickerId);
+                for (const [id, task] of this.tasks.entries()) {
+                    if (task.status === "RUNNING" && task.type !== "ACHIEVEMENT") {
+                        let cur = Math.min(task.cur + 1, task.max);
+                        this.updateTask(id, { cur });
+                    }
+                }
             }, 1000);
         },
 
@@ -570,7 +593,7 @@
                 oldData.actionRequired === newData.actionRequired) {
                 const card = document.getElementById(`claw-task-${id}`);
                 if (card) {
-                    const pct = newData.pending || newData.failed ? 0 : Math.min(100, (newData.cur / newData.max) * 100).toFixed(1);
+                    const pct = this._getPct(newData).toFixed(1);
 
                     const fill = card.querySelector('.progress-fill');
                     if (fill) fill.style.width = `${pct}%`;
@@ -645,7 +668,7 @@
             });
 
             body.innerHTML = sorted.map(([id, t]) => {
-                const pct = t.pending || t.failed ? 0 : Math.min(100, (t.cur / t.max) * 100).toFixed(1);
+                const pct = this._getPct(t).toFixed(1);
                 let icon = ICONS.BOLT;
                 if (t.done) icon = ICONS.CHECK;
                 else if (t.failed) icon = ICONS.STOP;
@@ -1379,18 +1402,26 @@
 
             if (!incomplete.length) return resolve({ selected: null, options: {} });
 
-            const items = incomplete.map(q => {
+            const items = [];
+            incomplete.forEach(q => {
                 const cfg = q.config?.taskConfig ?? q.config?.taskConfigV2;
                 const td = cfg?.tasks ? Tasks.detectType(cfg, q.config?.application?.id) : null;
+                
+                if (!td) return;
+                // Exclude desktop-only quests (play/stream) on any non-desktop clients (from Orion)
+                if (!SYS.IS_DESKTOP && (td.type === 'GAME' || td.type === 'STREAM')) return;
+                
                 const rw = q.config?.rewardsConfig?.rewards?.[0];
-                return {
+                items.push({
                     id: q.id,
                     name: q.config?.messages?.questName ?? "Unknown Quest",
-                    type: td ? (td.type === "WATCH_VIDEO" ? "VIDEO" : td.type) : "UNKNOWN",
+                    type: td.type === "WATCH_VIDEO" ? "VIDEO" : td.type,
                     rt: rw?.type ?? 0,
                     reward: rw?.messages?.name ?? "Unknown"
-                };
+                });
             });
+
+            if (!items.length) return resolve({ selected: null, options: {} });
 
             const rewardTypes = [...new Set(items.map(q => q.rt))].sort();
             const meta = rt => REWARD_META[rt] ?? REWARD_FALLBACK;
@@ -1514,6 +1545,9 @@
             RUNTIME.autoClaim = options.autoClaim;
             RUNTIME.playSound = options.playSound;
             Logger.log(`[System] ${selected.size} quest(s) selected. Auto-enroll: ${options.autoEnroll ? 'ON' : 'OFF'}, Auto-claim: ${options.autoClaim ? 'ON' : 'OFF'}`, 'info');
+        } else {
+            Logger.log('[System] No quests selected. Shutting down.', 'info');
+            return Logger.shutdown();
         }
 
         let loopCount = 1;
@@ -1546,6 +1580,12 @@
 
                         const typeData = Tasks.detectType(cfg, q.config?.application?.id);
                         if (!typeData) return;
+                        
+                        // NEW: port Orion's IS_DESKTOP check here
+                        if (!SYS.IS_DESKTOP && (typeData.type === 'GAME' || typeData.type === 'STREAM')) {
+                            Logger.log(`[Quest] "${q.config?.messages?.questName}" requires desktop app. Skipping.`, 'warn');
+                            return;
+                        }
 
                         const { type, keyName, target } = typeData;
                         if (target <= 0) return;
