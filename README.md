@@ -28,15 +28,15 @@ Completes all Discord Quests automatically &mdash; game, video, stream, activity
 
 ## Quick start
 
-**1.** Open Discord ([Canary](https://canary.discord.com/download) recommended &mdash; console enabled by default)
+> ⚠️ **Update:** Discord recently restricted its Content Security Policy (CSP), which blocks the old `fetch()` command. You must now paste the raw code directly.
 
-**2.** Press `Ctrl + Shift + I` &rarr; Console tab
+**1.** Open Discord ([Canary](https://canary.discord.com/download) recommended &mdash; console enabled by default).
 
-**3.** Paste and hit Enter
-```js
-fetch('https://raw.githubusercontent.com/l-limon-l/Claw/refs/heads/main/index.js').then(r => r.text()).then(eval);
-```
+**2.** Open the [Claw source code](https://raw.githubusercontent.com/l-limon-l/Claw/refs/heads/main/index.js) in your browser, select all (`Ctrl + A`), and copy it (`Ctrl + C`).
 
+**3.** In Discord, press `Ctrl + Shift + I` to open Developer Tools and go to the **Console** tab.
+
+**4.** Paste the copied code and hit **Enter**.
 
 > `Shift + .` toggles the dashboard. Click **STOP** to kill it instantly.
 
