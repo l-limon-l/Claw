@@ -1,161 +1,67 @@
 <div align="center">
-# Claw
 
-**Auto-complete every Discord Quest in seconds** &mdash; v4.6
+# ⚡ CLAW
 
-[![Version](https://img.shields.io/badge/v4.6-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://github.com/nyxxbit/discord-quest-completer)
+**The ultimate zero-dependency quest automation engine for Discord.**
 
-Completes all Discord Quests automatically &mdash; game, video, stream, activity, and achievement quests. Paste one script into DevTools, get every reward. No installs, no tokens, no dependencies.
+[![Build](https://img.shields.io/badge/Build-v4.6.3-5865F2?style=for-the-badge&logo=discord&logoColor=white)](#)
+[![Status](https://img.shields.io/badge/Status-Undetected-success?style=for-the-badge)](#)
 
-**Works on every Discord update** &mdash; no hardcoded paths, uses `constructor.displayName` for resilient module detection.
-
-[Get Started](#quick-start) &bull; [How It Works](#how-it-works) &bull; [Configuration](#configuration)
+*Claw instantly auto-completes Game, Video, Stream, Activity, and Achievement quests right from a sleek, built-in dashboard.*
 
 </div>
 
----
+<br/>
 
-## Why Claw?
+## ✨ Why Claw?
 
-- **Completes ALL quest types** &mdash; Video, Game, Stream, Activity, and the new Achievement quests
-- **Auto-claiming** &mdash; Claim rewards directly from the dashboard. Tries to claim automatically (if enabled), or provides a smart interactive button if captcha is needed
-- **Resilient module loader** &mdash; finds Discord stores by class name, not minified paths. Survives Discord updates
-- **Smart rate limiting** &mdash; exponential backoff on 429/5xx, skip-list for dead quests, adaptive video speed. Distinguishes between global and endpoint limits, non-blocking retries
-- **Fault-tolerant execution** &mdash; One failed quest won't break the queue (`Promise.allSettled`)
-- **Zero setup** &mdash; single paste into the console. No Node.js, no npm, no extensions
+Unlike heavy desktop applications or sketchy executables, Claw runs entirely within Discord's own Developer Console. 
 
----
+- **Universal Support:** Crushes *every* quest type Discord throws at you.
+- **Invisible & Smart:** Avoids rate limits with exponential backoff and adaptive video speeds.
+- **In-App Dashboard:** Track progress and claim rewards directly inside Discord.
+- **Update-Proof:** Dynamically maps internal webpack classes so it survives Discord client updates.
 
-## Quick start
+<br/>
 
-> ⚠️ **Update:** Discord recently restricted its Content Security Policy (CSP), which blocks the old `fetch()` command. You must now paste the raw code directly.
+## 🚀 Quick Start
 
-**1.** Open Discord ([Canary](https://canary.discord.com/download) recommended &mdash; console enabled by default).
+Standard Discord locks the Developer Console by default. We've included a streamlined script to safely unlock it.
 
-**2.** Open the [Claw source code](https://raw.githubusercontent.com/l-limon-l/Claw/refs/heads/main/index.js) in your browser, select all (`Ctrl + A`), and copy it (`Ctrl + C`).
+### Step 1: Unlock the Console
+Locate and double-click the **`enable-devtools.bat`** file included in this repository. 
+> *This automatically closes Discord, enables the developer tools (on Stable, PTB, and Canary), and restarts the app for you.*
 
-**3.** In Discord, press `Ctrl + Shift + I` to open Developer Tools and go to the **Console** tab.
+### Step 2: Inject the Engine
+Open the **[`index.js`](https://raw.githubusercontent.com/l-limon-l/Claw/refs/heads/main/index.js)** file in your browser, select all the text (`Ctrl + A`), and copy it (`Ctrl + C`).
 
-**4.** Paste the copied code and hit **Enter**.
+### Step 3: Launch
+1. Inside Discord, press `Ctrl + Shift + I` to open the Developer Tools.
+2. Click on the **Console** tab at the top.
+3. Paste the code and hit **Enter**.
 
-> `Shift + .` toggles the dashboard. Click **STOP** to kill it instantly.
+<br/>
 
-<details>
-<summary>Enable console on stable Discord</summary>
+## 🕹️ Controls
 
-Close Discord, edit `%appdata%/discord/settings.json`:
+Once injected, Claw runs quietly in the background. A beautiful, draggable dashboard will appear to give you full control.
 
-```json
-{ "DANGEROUS_ENABLE_DEVTOOLS_ONLY_ENABLE_IF_YOU_KNOW_WHAT_YOURE_DOING": true }
-```
+| Action | Shortcut / Behavior |
+| :--- | :--- |
+| **Toggle Dashboard** | Press `Shift + .` to show or hide the UI at any time. |
+| **Claim Rewards** | Click the **Claim** button directly on the quest card when a task finishes. |
+| **Stop Engine** | Click the red **Stop** icon in the UI to gracefully shut down Claw. |
 
-Restart Discord.
-</details>
+<br/>
 
----
+## ⚠️ Important Disclaimer
 
-## How it works
+> Automating interactions technically violates Discord’s Terms of Service. This tool is provided strictly for **educational and research purposes**. The developer is not responsible for any account restrictions or bans. Please use responsibly.
 
-Claw extracts Discord's internal webpack stores (`QuestStore`, `RunStore`, `Dispatcher`, etc.) and uses them to spoof game processes, send fake video progress, and dispatch heartbeat signals &mdash; all through Discord's own authenticated API client.
-
-```
-QuestStore → filter incomplete → auto-enroll → dispatch tasks → poll progress → auto-claim → done
-```
-
-| Quest type | What Claw does |
-|------------|----------------|
-| **Video** | Sends fake `video-progress` timestamps with adaptive speed (6-22 API calls instead of 180) |
-| **Game** | Injects a spoofed process into `RunStore` with real metadata from Discord's app registry |
-| **Stream** | Patches `StreamStore.getStreamerActiveStreamMetadata` with synthetic stream data |
-| **Activity** | Heartbeats against a voice channel to simulate participation |
-| **Achievement** | Monitors `ACHIEVEMENT_IN_ACTIVITY` events &mdash; requires joining the Activity manually |
-
----
-
-## Dashboard
-
-Draggable overlay with persistent position. Live-sorts tasks so you always see what matters:
-
-| Priority | State | Visual |
-|----------|-------|--------|
-| 1st | **Running** (highest progress first) | Blue accent, animated progress bar |
-| 2nd | **Queued** | Orange accent, dimmed |
-| 3rd | **Completed** | Green checkmark + Interactive CLAIM button if manual action needed |
-
-Desktop notifications fire on each quest completion.
-
----
-
-## Auto & In-UI Claiming
-
-You can configure Claw's claiming behavior via the `TRY_TO_CLAIM_REWARD` setting.
-
-- **Automated Claiming:** If enabled, tries to claim instantly upon completion.
-- **In-UI Button:** If auto-claim fails due to captcha, or is disabled, a **CLAIM REWARD** button appears directly on the task card.
-
----
-
-## Configuration
-
-Tweak before pasting. Timing values, intervals, and sensitive limits are now hardcoded internally to prevent accidental breakage.
-
-```js
-const CONFIG = {
-    TRY_TO_CLAIM_REWARD: false,  // disable auto-claim to avoid captcha popups
-    HIDE_ACTIVITY: false,        // suppress "Playing..." from friends list
-    GAME_CONCURRENCY: 1,         // >1 risks detection and ban, keep at 1
-    VIDEO_CONCURRENCY: 2,        // parallel video tasks
-    MAX_LOG_ITEMS: 60,           // UI log limit
-};
-```
-
----
-
-## Error handling
-
-| Scenario | Behavior |
-|----------|----------|
-| **429 / 5xx** | Exponential backoff, re-queued up to `MAX_RETRIES`, distinguishes global vs endpoint limits |
-| **404 on enroll** | Quest added to skip-list, script continues |
-| **Repeated failures** | Task abandoned after `MAX_TASK_FAILURES` consecutive errors |
-| **25 min timeout** | Task force-stopped, cycle advances |
-| **Missing modules** | Required modules validated on boot; optional ones log a warning |
-| **Claim fails** | Falls back to CLAIM button in dashboard |
-| **Fatal crash** | Unconditionally releases `window.ClawLock` so the script can be re-run without refreshing |
-
----
-
-## Architecture
-
-Single-file IIFE. No build tools, no external deps.
-
-```
-index.js
-├─ CONFIG / SYS / RUNTIME      tunables, frozen system limits, active cleanups
-├─ ErrorHandler                classifies HTTP errors (retry / skip / fatal)
-├─ Logger                      DOM dashboard + task state + log output
-├─ Traffic                     FIFO request queue with exponential backoff
-├─ Patcher                     RunStore / StreamStore monkey-patching
-├─ Tasks                       VIDEO, GAME, STREAM, ACTIVITY, ACHIEVEMENT handlers
-├─ loadModules()               resilient webpack extraction via constructor.displayName
-└─ main()                      enroll → discover → execute → claim → loop
-```
-
-### Module detection
-
-Unlike other scripts that break on every Discord update, Claw finds stores by their **class name** (`QuestStore`, `RunningGameStore`, etc.) via `constructor.displayName`. The Dispatcher is found by structural signature (`_subscriptions` + `subscribe` + `dispatch`), and the API client by its unique `.del` method. No hardcoded minified paths.
-
----
-## Disclaimer
-
-This tool is for **educational and research purposes only**. Automating user actions violates Discord's [Terms of Service](https://discord.com/terms). The developer is not responsible for any account suspensions or bans. Use at your own risk.
+<br/>
 
 ---
 
 <div align="center">
-
-Built by [**l_limon_l**](https://e-z.bio/l_limon_l)
-
-If this helped you, drop a star &mdash; it keeps the project alive.
-
+  <p>Engineered with 💜 by <a href="https://e-z.bio/l_limon_l"><strong>l_limon_l</strong></a></p>
 </div>
