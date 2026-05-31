@@ -1,7 +1,7 @@
 (async () => {
     "use strict";
 
-    /* ── config (Safe for users to edit) ────────────────────────── */
+    
     const CONFIG = {
         NAME: "Claw",
         VERSION: "v4.6.3 (Enterprise Core)",
@@ -10,12 +10,12 @@
         WARN: "#f59e0b",
         ERR: "#ef4444",
         HIDE_ACTIVITY: false,
-        GAME_CONCURRENCY: 1,            
-        VIDEO_CONCURRENCY: 2,           
+        GAME_CONCURRENCY: 1,
+        VIDEO_CONCURRENCY: 2,
         MAX_LOG_ITEMS: 60
     };
 
-    /* ── internal system limits (DO NOT EDIT) ─────────────────── */
+    
     const SYS = Object.freeze({
         MAX_TIME: 25 * 60 * 1000,
         MAX_TASK_FAILURES: 5,
@@ -32,7 +32,7 @@
         playSound: false
     };
 
-    /* ── audio cue ───────────────────────────────────────────────── */
+    
     const Sound = {
         play(type) {
             if (!RUNTIME.playSound) return;
@@ -53,7 +53,7 @@
                     g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.55);
                     o.start(t0); o.stop(t0 + 0.6);
                 } else {
-                    o.frequency.value = 880; 
+                    o.frequency.value = 880;
                     g.gain.setValueAtTime(0.45, t0);
                     g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.18);
                     o.start(t0); o.stop(t0 + 0.2);
@@ -457,7 +457,7 @@
 
                 btn.innerText = "WAITING...";
                 btn.disabled = true;
-                
+
                 this.updateTask(questId, { ...taskData, claimState: 'WAITING' });
 
                 try {
@@ -588,7 +588,7 @@
             const newData = { ...oldData, ...data, done: isDone, pending: isPending, failed: isFailed };
             this.tasks.set(id, newData);
 
-            if (oldData && oldData.status === newData.status && oldData.removing === newData.removing && 
+            if (oldData && oldData.status === newData.status && oldData.removing === newData.removing &&
                 oldData.claimable === newData.claimable && oldData.claimState === newData.claimState &&
                 oldData.actionRequired === newData.actionRequired) {
                 const card = document.getElementById(`claw-task-${id}`);
@@ -941,7 +941,7 @@
                 try {
                     await Traffic.enqueue(`/quests/${q.id}/video-progress`, { timestamp: Number(cur.toFixed(6)) });
                     calls++;
-                } catch(e) {Logger.log(`[Video] Initial ping failed: ${e.message}`, 'debug');}
+                } catch (e) { Logger.log(`[Video] Initial ping failed: ${e.message}`, 'debug'); }
             }
 
             while (cur < t.target && RUNTIME.running) {
@@ -1233,7 +1233,7 @@
         }
     };
 
-    /* ── webpack module extraction (Orion Sentry Dodge / Vencord) ── */
+    
     function loadModules() {
         try {
             if (typeof window.Vencord !== 'undefined' && window.Vencord.Webpack) {
@@ -1266,7 +1266,7 @@
 
                 const required = ['QuestStore', 'API', 'Dispatcher', 'RunStore'];
                 const missing = required.filter(k => !Mods[k]);
-                
+
                 if (missing.length === 0) {
                     Patcher.init(Mods.RunStore);
                     return true;
@@ -1387,7 +1387,7 @@
         return Promise.allSettled(executing);
     }
 
-    const REWARD_META = { 1: { label: "In-Game Item", color: "var(--warn-bright)" }, 3: { label: "Avatar Decoration", color: "var(--accent-bright)" }, 4: { label: "Orbs", color: "var(--success-bright)" } };
+    const REWARD_META = { 1: { label: "In-Game Item", color: "var(--warn-bright)" }, 3: { label: "Avatar Decoration", color: "var(--accent-bright)" }, 4: { label: "Orbs", color: "var(--success-bright)" }, 99: { label: "Manual Achievement", color: "var(--danger-bright)" } };
     const REWARD_FALLBACK = { label: "Other", color: "var(--text-tertiary)" };
 
     function showQuestPicker(quests) {
@@ -1406,17 +1406,20 @@
             incomplete.forEach(q => {
                 const cfg = q.config?.taskConfig ?? q.config?.taskConfigV2;
                 const td = cfg?.tasks ? Tasks.detectType(cfg, q.config?.application?.id) : null;
-                
+
                 if (!td) return;
-                // Exclude desktop-only quests (play/stream) on any non-desktop clients (from Orion)
-                if (!SYS.IS_DESKTOP && (td.type === 'GAME' || td.type === 'STREAM')) return;
                 
+                if (!SYS.IS_DESKTOP && (td.type === 'GAME' || td.type === 'STREAM')) return;
+
                 const rw = q.config?.rewardsConfig?.rewards?.[0];
+                let rewardType = rw?.type ?? 0;
+                if (td.type === "ACHIEVEMENT") rewardType = 99;
+
                 items.push({
                     id: q.id,
                     name: q.config?.messages?.questName ?? "Unknown Quest",
                     type: td.type === "WATCH_VIDEO" ? "VIDEO" : td.type,
-                    rt: rw?.type ?? 0,
+                    rt: rewardType,
                     reward: rw?.messages?.name ?? "Unknown"
                 });
             });
@@ -1431,14 +1434,14 @@
                     <div class="quest-pick-section">Filter by reward</div>
                     <div class="quest-pick-filters">
                         ${rewardTypes.map(rt => {
-                            const m = meta(rt);
-                            return `<button class="reward-filter" data-rt="${rt}" style="border-color:${m.color};color:${m.color};">${m.label} (${items.filter(q => q.rt === rt).length})</button>`;
-                        }).join('')}
+                const m = meta(rt);
+                return `<button class="reward-filter" data-rt="${rt}" style="border-color:${m.color};color:${m.color};">${m.label} (${items.filter(q => q.rt === rt).length})</button>`;
+            }).join('')}
                     </div>
                     <div id="claw-quest-list" style="max-height: 160px; overflow-y: auto; padding-right: 8px;">
                         ${items.map(q => {
-                            const c = meta(q.rt).color;
-                            return `<label class="quest-pick" style="border-left-color:${c};" data-rt="${q.rt}">
+                const c = meta(q.rt).color;
+                return `<label class="quest-pick" style="border-left-color:${c};" data-rt="${q.rt}">
                                 <input type="checkbox" checked data-qid="${q.id}">
                                 <div class="quest-pick-info">
                                     <div class="quest-pick-name">${q.name}</div>
@@ -1448,7 +1451,7 @@
                                     </div>
                                 </div>
                             </label>`;
-                        }).join('')}
+            }).join('')}
                     </div>
                     <div style="padding: 8px 0 2px;">
                         <div class="quest-pick-section">Options</div>
@@ -1580,7 +1583,7 @@
 
                         const typeData = Tasks.detectType(cfg, q.config?.application?.id);
                         if (!typeData) return;
-                        
+
                         // NEW: port Orion's IS_DESKTOP check here
                         if (!SYS.IS_DESKTOP && (typeData.type === 'GAME' || typeData.type === 'STREAM')) {
                             Logger.log(`[Quest] "${q.config?.messages?.questName}" requires desktop app. Skipping.`, 'warn');
@@ -1594,7 +1597,7 @@
 
                         if (!q.userStatus?.enrolledAt && !RUNTIME.autoEnroll) {
                             Logger.updateTask(tInfo.id, { name: tInfo.name, type: tInfo.type, cur: 0, max: tInfo.target, status: "PENDING", actionRequired: 'ENROLL' });
-                            return; 
+                            return;
                         }
 
                         if (Logger.tasks.has(q.id) && Logger.tasks.get(q.id).status === "RUNNING") return;
