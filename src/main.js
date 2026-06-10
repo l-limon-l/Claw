@@ -100,8 +100,12 @@ if (window.clawLock) {
                             <label class="claw-toggle"><input type="checkbox" id="opt-claim"><span class="slider"></span></label>
                         </div>
                         <div class="claw-option">
-                            <span class="claw-option-label">Sound on quest completion</span>
+                            <span class="claw-option-label">Sound on completion</span>
                             <label class="claw-toggle"><input type="checkbox" id="opt-sound"><span class="slider"></span></label>
+                        </div>
+                        <div class="claw-option">
+                            <span class="claw-option-label">Desktop notifications</span>
+                            <label class="claw-toggle"><input type="checkbox" id="opt-notify"><span class="slider"></span></label>
                         </div>
                     </div>
                     <div class="quest-pick-actions">
@@ -159,7 +163,8 @@ if (window.clawLock) {
                 const options = {
                     autoEnroll: $('#opt-enroll').checked,
                     autoClaim: $('#opt-claim').checked,
-                    playSound: $('#opt-sound').checked
+                    playSound: $('#opt-sound').checked,
+                    notify: $('#opt-notify').checked
                 };
 
                 const logsWrap = document.getElementById('claw-logs-wrap');
@@ -192,6 +197,7 @@ if (window.clawLock) {
             RUNTIME.autoEnroll = options.autoEnroll;
             RUNTIME.autoClaim = options.autoClaim;
             RUNTIME.playSound = options.playSound;
+            RUNTIME.notify = options.notify;
             Logger.log(`[System] ${selected.size} quest(s) selected. Auto-enroll: ${options.autoEnroll ? 'ON' : 'OFF'}, Auto-claim: ${options.autoClaim ? 'ON' : 'OFF'}`, 'info');
         } else {
             Logger.log('[System] No quests selected. Shutting down.', 'info');

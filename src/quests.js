@@ -351,7 +351,7 @@ export const Tasks = {
         Sound.play('tick');
 
         try {
-            if (typeof Notification !== 'undefined' && Notification.permission === "granted") {
+            if (RUNTIME.notify && typeof Notification !== 'undefined' && Notification.permission === "granted") {
                 new Notification("Claw: Quest Completed", { body: t.name, icon: "https://cdn.discordapp.com/emojis/1120042457007792168.webp", tag: `claw-${q.id}` });
             }
         } catch (e) { Logger.log(`[Notification] ${e.message}`, 'debug'); }

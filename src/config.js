@@ -24,7 +24,8 @@ export const RUNTIME = {
     selectedQuests: null,
     autoEnroll: true,
     autoClaim: false,
-    playSound: false
+    playSound: false,
+    notify: false
 };
 
 export const ICONS = Object.freeze({

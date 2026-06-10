@@ -35,7 +35,8 @@
         selectedQuests: null,
         autoEnroll: true,
         autoClaim: false,
-        playSound: false
+        playSound: false,
+        notify: false
       };
       ICONS = Object.freeze({
         BOLT: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.29-.62L14.5 3h1l-1 7h3.5c.58 0 .57.32.29.62L11 21z"/></svg>`,
@@ -770,7 +771,7 @@
           Logger.log(`[Task] Completed "${t.name}"!`, "success");
           Sound.play("tick");
           try {
-            if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+            if (RUNTIME.notify && typeof Notification !== "undefined" && Notification.permission === "granted") {
               new Notification("Claw: Quest Completed", { body: t.name, icon: "https://cdn.discordapp.com/emojis/1120042457007792168.webp", tag: `claw-${q.id}` });
             }
           } catch (e) {
@@ -1549,8 +1550,12 @@
                             <label class="claw-toggle"><input type="checkbox" id="opt-claim"><span class="slider"></span></label>
                         </div>
                         <div class="claw-option">
-                            <span class="claw-option-label">Sound on quest completion</span>
+                            <span class="claw-option-label">Sound on completion</span>
                             <label class="claw-toggle"><input type="checkbox" id="opt-sound"><span class="slider"></span></label>
+                        </div>
+                        <div class="claw-option">
+                            <span class="claw-option-label">Desktop notifications</span>
+                            <label class="claw-toggle"><input type="checkbox" id="opt-notify"><span class="slider"></span></label>
                         </div>
                     </div>
                     <div class="quest-pick-actions">
@@ -1605,7 +1610,8 @@
               const options = {
                 autoEnroll: $("#opt-enroll").checked,
                 autoClaim: $("#opt-claim").checked,
-                playSound: $("#opt-sound").checked
+                playSound: $("#opt-sound").checked,
+                notify: $("#opt-notify").checked
               };
               const logsWrap = document.getElementById("claw-logs-wrap");
               if (logsWrap) logsWrap.classList.remove("collapsed");
@@ -1645,6 +1651,7 @@
             RUNTIME.autoEnroll = options.autoEnroll;
             RUNTIME.autoClaim = options.autoClaim;
             RUNTIME.playSound = options.playSound;
+            RUNTIME.notify = options.notify;
             Logger.log(`[System] ${selected.size} quest(s) selected. Auto-enroll: ${options.autoEnroll ? "ON" : "OFF"}, Auto-claim: ${options.autoClaim ? "ON" : "OFF"}`, "info");
           } else {
             Logger.log("[System] No quests selected. Shutting down.", "info");
