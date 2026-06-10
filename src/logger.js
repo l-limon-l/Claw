@@ -15,11 +15,11 @@ export const Logger = {
         const style = document.createElement('style');
         style.id = 'claw-styles';
         style.innerHTML = `
-            @keyframes slideIn { from { transform: translateY(-20px) scale(0.985); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+            @keyframes slideIn { from { transform: translateY(-10px) scale(0.99); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
             @keyframes fadeOut { from { opacity: 1; max-height: 140px; margin-bottom: 12px; } to { opacity: 0; max-height: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; border-width: 0; } }
-            @keyframes popIn { 0% { opacity: 0; transform: scale(0.95) translateY(10px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
+            @keyframes popIn { 0% { opacity: 0; transform: scale(0.97) translateY(5px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
             @keyframes slideRight { 0% { opacity: 0; transform: translateX(-10px); } 100% { opacity: 1; transform: translateX(0); } }
-            @keyframes flipInX { 0% { opacity: 0; transform: perspective(400px) rotateX(15deg) translateY(10px); } 100% { opacity: 1; transform: perspective(400px) rotateX(0deg) translateY(0); } }
+            @keyframes flipInX { 0% { opacity: 0; transform: perspective(400px) rotateX(8deg) translateY(8px); } 100% { opacity: 1; transform: perspective(400px) rotateX(0deg) translateY(0); } }
             #claw-ui {
                 --bg-base: #08090a;
                 --bg-panel: rgba(10, 11, 14, 0.65);
@@ -98,8 +98,8 @@ export const Logger = {
             .summary-item {
                 padding: 12px 10px; border-radius: 10px; border: none;
                 background: var(--bg-surface); display: flex; flex-direction: column; gap: 6px; min-width: 0;
-                box-shadow: var(--shadow-card); transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), background 0.25s ease, box-shadow 0.25s ease;
-                animation: popIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+                box-shadow: var(--shadow-card); transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), background 0.3s ease, box-shadow 0.3s ease;
+                animation: popIn 0.55s cubic-bezier(0.25, 1, 0.5, 1) backwards;
             }
             .summary-item:nth-child(1) { animation-delay: 0.05s; }
             .summary-item:nth-child(2) { animation-delay: 0.1s; }
@@ -127,7 +127,7 @@ export const Logger = {
                 background: radial-gradient(ellipse at top right, rgba(113, 112, 255, 0.04), transparent 50%), var(--bg-panel);
                 display: flex; flex-direction: column; justify-content: center; padding: 24px 22px;
                 box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05);
-                animation: popIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+                animation: popIn 0.5s cubic-bezier(0.25, 1, 0.5, 1);
             }
             .claw-empty-eyebrow { color: var(--text-quaternary); font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2px; margin-bottom: 10px; }
             .claw-empty-title { color: var(--text-primary); font-size: 18px; font-weight: 510; line-height: 1.2; letter-spacing: -0.01em; margin-bottom: 8px; }
@@ -136,10 +136,10 @@ export const Logger = {
             .task-card {
                 display: flex; gap: 14px; padding: 16px; background: rgba(255,255,255,0.02);
                 border-radius: 14px; margin-bottom: 12px; border: none;
-                transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), background 0.3s ease, box-shadow 0.3s ease;
+                transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1), background 0.3s ease, box-shadow 0.3s ease;
                 box-shadow: var(--shadow-card);
             }
-            .task-card.animate-in { animation: flipInX 0.45s cubic-bezier(0.2, 0.8, 0.2, 1); }
+            .task-card.animate-in { animation: flipInX 0.55s cubic-bezier(0.25, 1, 0.5, 1); }
             .task-card:hover { background: rgba(255,255,255,0.04); transform: translateX(3px); box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 8px 24px rgba(0,0,0,0.25); }
             .task-card.active { box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.4), 0 8px 24px rgba(99, 102, 241, 0.15); background: rgba(99, 102, 241, 0.05); }
             .task-card.done { background: rgba(16, 185, 129, 0.03); box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.16); }
@@ -177,7 +177,7 @@ export const Logger = {
                 height: 8px; background: rgba(0, 0, 0, 0.4); border-radius: 999px; overflow: hidden;
                 box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.04);
             }
-            .progress-fill { height: 100%; background: linear-gradient(90deg, #6366f1, #a855f7); width: 0%; transition: width 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); box-shadow: 0 0 12px rgba(168, 85, 247, 0.5); }
+            .progress-fill { height: 100%; background: linear-gradient(90deg, #6366f1, #a855f7); width: 0%; transition: width 0.5s cubic-bezier(0.25, 1, 0.5, 1); box-shadow: 0 0 12px rgba(168, 85, 247, 0.5); }
             .task-card.done .progress-fill { background: linear-gradient(90deg, #10b981, #059669); box-shadow: 0 0 12px rgba(16, 185, 129, 0.4); }
             .task-card.failed .progress-fill { background: linear-gradient(90deg, rgba(239, 68, 68, 0.85), rgba(239, 68, 68, 0.50)); box-shadow: none; }
             .task-card.pending .progress-fill { background: linear-gradient(90deg, rgba(245, 158, 11, 0.60), rgba(245, 158, 11, 0.30)); box-shadow: none; }
