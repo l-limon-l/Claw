@@ -4,7 +4,7 @@ import { Patcher, Mods } from './discord.js';
 import { Tasks } from './quests.js';
 
 export const Logger = {
-    root: null, tasks: new Map(), tickerId: null,
+    root: null, tasks: new Map(), tickerId: null, animatedTasks: new Set(),
 
     init() {
         const oldUI = document.getElementById('claw-ui'); if (oldUI) oldUI.remove();
@@ -138,8 +138,8 @@ export const Logger = {
                 border-radius: 14px; margin-bottom: 12px; border: none;
                 transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), background 0.3s ease, box-shadow 0.3s ease;
                 box-shadow: var(--shadow-card);
-                animation: flipInX 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
             }
+            .task-card.animate-in { animation: flipInX 0.45s cubic-bezier(0.2, 0.8, 0.2, 1); }
             .task-card:hover { background: rgba(255,255,255,0.04); transform: translateX(3px); box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 8px 24px rgba(0,0,0,0.25); }
             .task-card.active { box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.4), 0 8px 24px rgba(99, 102, 241, 0.15); background: rgba(99, 102, 241, 0.05); }
             .task-card.done { background: rgba(16, 185, 129, 0.03); box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.16); }
@@ -529,6 +529,15 @@ export const Logger = {
         if (!summary) return;
 
         const counts = this.getTaskSummary();
+        
+        if (summary.children.length === 4) {
+            summary.children[0].querySelector('.summary-value').textContent = counts.running;
+            summary.children[1].querySelector('.summary-value').textContent = counts.queued;
+            summary.children[2].querySelector('.summary-value').textContent = counts.done;
+            summary.children[3].querySelector('.summary-value').textContent = counts.failed;
+            return;
+        }
+
         summary.innerHTML = `
             <div class="summary-item running"><span class="summary-label">Running</span><span class="summary-value">${counts.running}</span></div>
             <div class="summary-item queued"><span class="summary-label">Queued</span><span class="summary-value">${counts.queued}</span></div>
@@ -683,8 +692,14 @@ export const Logger = {
 
             const stateClass = t.done ? 'done' : t.failed ? 'failed' : t.pending ? 'pending' : 'active';
             const removingClass = t.removing ? 'removing' : '';
+            
+            let animClass = '';
+            if (!this.animatedTasks.has(id)) {
+                this.animatedTasks.add(id);
+                animClass = 'animate-in';
+            }
 
-            return `<div id="claw-task-${id}" class="task-card ${stateClass} ${removingClass}"><div class="task-icon">${icon}</div><div class="task-info"><div class="task-top"><div class="task-name" title="${t.name}">${t.name}</div><div class="task-status">${statusText}</div></div><div class="task-meta"><span class="task-kind">${progressLabel}</span><span class="progress-text">${Math.floor(t.cur)} / ${t.max}${unit}</span></div><div class="progress-track"><div class="progress-fill" style="width: ${pct}%"></div></div>${actionBtn}</div></div>`;
+            return `<div id="claw-task-${id}" class="task-card ${stateClass} ${removingClass} ${animClass}"><div class="task-icon">${icon}</div><div class="task-info"><div class="task-top"><div class="task-name" title="${t.name}">${t.name}</div><div class="task-status">${statusText}</div></div><div class="task-meta"><span class="task-kind">${progressLabel}</span><span class="progress-text">${Math.floor(t.cur)} / ${t.max}${unit}</span></div><div class="progress-track"><div class="progress-fill" style="width: ${pct}%"></div></div>${actionBtn}</div></div>`;
         }).join('');
     }
 };
