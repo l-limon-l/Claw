@@ -36,8 +36,6 @@ if (window.clawLock) {
                 && !Tasks.skipped.has(q.id)
             );
 
-            if (!incomplete.length) return resolve({ selected: null, options: {} });
-
             const items = [];
             incomplete.forEach(q => {
                 const cfg = q.config?.taskConfig ?? q.config?.taskConfigV2;
@@ -60,34 +58,15 @@ if (window.clawLock) {
                 });
             });
 
-            if (!items.length) return resolve({ selected: null, options: {} });
-
             const rewardTypes = [...new Set(items.map(q => q.rt))].sort();
             const meta = rt => REWARD_META[rt] ?? REWARD_FALLBACK;
 
-            body.innerHTML = `
-                <div style="padding: 6px 4px 0;">
-                    <div class="quest-pick-section">Filter by reward</div>
-                    <div class="quest-pick-filters">
-                        ${rewardTypes.map(rt => {
-                const m = meta(rt);
-                return `<button class="reward-filter" data-rt="${rt}" style="border-color:${m.color};color:${m.color};">${m.label} (${items.filter(q => q.rt === rt).length})</button>`;
-            }).join('')}
-                    </div>
-                    <div id="claw-quest-list" style="max-height: 160px; overflow-y: auto; padding-right: 8px;">
-                        ${items.map(q => {
-                const c = meta(q.rt).color;
-                return `<label class="quest-pick" style="border-left-color:${c};" data-rt="${q.rt}">
-                                <input type="checkbox" checked data-qid="${q.id}">
-                                <div class="quest-pick-info">
-                                    <div class="quest-pick-name">${q.name}</div>
-                                    <div class="quest-pick-meta">
-                                        <span class="quest-pick-type">${q.type}</span>
-                                        <span class="quest-pick-reward" style="color:${c};">${q.reward}</span>
-                                    </div>
-                                </div>
-                            </label>`;
-            }).join('')}
+            if (!items.length) {
+                // If there are no incomplete quests, we render the options but no quest list
+                body.innerHTML = `
+                    <div style="padding: 16px; text-align: center; color: var(--text-tertiary); font-size: 13px; margin-bottom: 8px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 24px;">
+                        <div style="margin-bottom: 12px; opacity: 0.7;">${ICONS.CHECK}</div>
+                        <div>You have completed all available quests!</div>
                     </div>
                     <div style="padding: 8px 0 2px;">
                         <div class="quest-pick-section">Options</div>
@@ -101,7 +80,7 @@ if (window.clawLock) {
                         </div>
                         <div class="claw-option">
                             <span class="claw-option-label">Sound on completion</span>
-                            <label class="claw-toggle"><input type="checkbox" id="opt-sound"><span class="slider"></span></label>
+                            <label class="claw-toggle"><input type="checkbox" id="opt-sound" checked><span class="slider"></span></label>
                         </div>
                         <div class="claw-option">
                             <span class="claw-option-label">Desktop notifications</span>
@@ -109,56 +88,112 @@ if (window.clawLock) {
                         </div>
                     </div>
                     <div class="quest-pick-actions">
-                        <button class="quest-pick-btn toggle" id="claw-toggle-all">DESELECT ALL</button>
-                        <button class="quest-pick-btn start" id="claw-start-btn">${ICONS.BOLT} START (${items.length})</button>
+                        <button class="quest-pick-btn toggle disabled" id="claw-toggle-all">DESELECT ALL</button>
+                        <button class="quest-pick-btn start" id="claw-start-btn">${ICONS.BOLT} CONTINUE</button>
                     </div>
-                </div>
-            `;
+                `;
+            } else {
+                body.innerHTML = `
+                    <div style="padding: 6px 4px 0;">
+                        <div class="quest-pick-section">Filter by reward</div>
+                        <div class="quest-pick-filters">
+                            ${rewardTypes.map(rt => {
+                                const m = meta(rt);
+                                return `<button class="reward-filter" data-rt="${rt}" style="border-color:${m.color};color:${m.color};">${m.label} (${items.filter(q => q.rt === rt).length})</button>`;
+                            }).join('')}
+                        </div>
+                        <div id="claw-quest-list" style="max-height: 160px; overflow-y: auto; padding-right: 8px;">
+                            ${items.map(q => {
+                                const c = meta(q.rt).color;
+                                return `<label class="quest-pick" style="border-left-color:${c};" data-rt="${q.rt}">
+                                    <input type="checkbox" checked data-qid="${q.id}">
+                                    <div class="quest-pick-info">
+                                        <div class="quest-pick-name">${q.name}</div>
+                                        <div class="quest-pick-meta">
+                                            <span class="quest-pick-type">${q.type}</span>
+                                            <span class="quest-pick-reward" style="color:${c};">${q.reward}</span>
+                                        </div>
+                                    </div>
+                                </label>`;
+                            }).join('')}
+                        </div>
+                        <div style="padding: 8px 0 2px;">
+                            <div class="quest-pick-section">Options</div>
+                            <div class="claw-option">
+                                <span class="claw-option-label">Auto-enroll in quests</span>
+                                <label class="claw-toggle"><input type="checkbox" id="opt-enroll" checked><span class="slider"></span></label>
+                            </div>
+                            <div class="claw-option">
+                                <span class="claw-option-label">Auto-claim rewards</span>
+                                <label class="claw-toggle"><input type="checkbox" id="opt-claim"><span class="slider"></span></label>
+                            </div>
+                            <div class="claw-option">
+                                <span class="claw-option-label">Sound on completion</span>
+                                <label class="claw-toggle"><input type="checkbox" id="opt-sound" checked><span class="slider"></span></label>
+                            </div>
+                            <div class="claw-option">
+                                <span class="claw-option-label">Desktop notifications</span>
+                                <label class="claw-toggle"><input type="checkbox" id="opt-notify"><span class="slider"></span></label>
+                            </div>
+                        </div>
+                        <div class="quest-pick-actions">
+                            <button class="quest-pick-btn toggle" id="claw-toggle-all">DESELECT ALL</button>
+                            <button class="quest-pick-btn start" id="claw-start-btn">${ICONS.BOLT} START (${items.length})</button>
+                        </div>
+                    </div>
+                `;
+            }
 
             const $ = sel => body.querySelector(sel);
             const $$ = sel => [...body.querySelectorAll(sel)];
 
             const syncStartBtn = () => {
+                if (!items.length) return;
                 const n = $$('input[data-qid]:checked').length;
                 const btn = $('#claw-start-btn');
                 btn.innerHTML = `${ICONS.BOLT} START (${n})`;
-                btn.classList.toggle('disabled', n === 0);
+                btn.classList.toggle('disabled', items.length > 0 && n === 0);
             };
 
             const syncToggleLabel = () => {
+                if (!items.length) return;
                 const visible = $$('.quest-pick:not(.hidden)');
                 const allChecked = visible.length > 0 && visible.every(c => c.querySelector('input').checked);
                 $('#claw-toggle-all').textContent = allChecked ? 'DESELECT ALL' : 'SELECT ALL';
             };
 
-            $$('input[data-qid]').forEach(cb => cb.addEventListener('change', () => { syncStartBtn(); syncToggleLabel(); }));
+            if (items.length) {
+                $$('input[data-qid]').forEach(cb => cb.addEventListener('change', () => { syncStartBtn(); syncToggleLabel(); }));
 
-            const filters = Object.fromEntries(rewardTypes.map(rt => [rt, true]));
-            $$('.reward-filter').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const rt = Number(btn.dataset.rt);
-                    filters[rt] = !filters[rt];
-                    btn.classList.toggle('off', !filters[rt]);
-                    $$(`.quest-pick[data-rt="${rt}"]`).forEach(card => {
-                        card.classList.toggle('hidden', !filters[rt]);
-                        card.querySelector('input').checked = filters[rt];
+                const filters = Object.fromEntries(rewardTypes.map(rt => [rt, true]));
+                $$('.reward-filter').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const rt = Number(btn.dataset.rt);
+                        filters[rt] = !filters[rt];
+                        btn.classList.toggle('off', !filters[rt]);
+                        $$(`.quest-pick[data-rt="${rt}"]`).forEach(card => {
+                            card.classList.toggle('hidden', !filters[rt]);
+                            card.querySelector('input').checked = filters[rt];
+                        });
+                        syncStartBtn();
+                        syncToggleLabel();
                     });
-                    syncStartBtn();
-                    syncToggleLabel();
                 });
-            });
 
-            $('#claw-toggle-all').addEventListener('click', () => {
-                const visible = $$('.quest-pick:not(.hidden)');
-                const allChecked = visible.length > 0 && visible.every(c => c.querySelector('input').checked);
-                visible.forEach(c => { c.querySelector('input').checked = !allChecked; });
-                syncToggleLabel();
-                syncStartBtn();
-            });
+                $('#claw-toggle-all').addEventListener('click', () => {
+                    const visible = $$('.quest-pick:not(.hidden)');
+                    const allChecked = visible.length > 0 && visible.every(c => c.querySelector('input').checked);
+                    visible.forEach(c => { c.querySelector('input').checked = !allChecked; });
+                    syncToggleLabel();
+                    syncStartBtn();
+                });
+            }
 
             $('#claw-start-btn').addEventListener('click', async () => {
                 const selected = new Set();
-                $$('input[data-qid]:checked').forEach(cb => selected.add(cb.dataset.qid));
+                if (items.length) {
+                    $$('input[data-qid]:checked').forEach(cb => selected.add(cb.dataset.qid));
+                }
                 
                 const options = {
                     autoEnroll: $('#opt-enroll').checked,
@@ -166,6 +201,16 @@ if (window.clawLock) {
                     playSound: $('#opt-sound').checked,
                     notify: $('#opt-notify').checked
                 };
+
+                if (options.notify) {
+                    try {
+                        if (Notification.permission === 'default') {
+                            await Notification.requestPermission();
+                        }
+                    } catch (e) {
+                        Logger.log(`[Notification] Request permission failed: ${e.message}`, 'debug');
+                    }
+                }
 
                 const logsWrap = document.getElementById('claw-logs-wrap');
                 if (logsWrap) logsWrap.classList.remove('collapsed');
@@ -186,8 +231,15 @@ if (window.clawLock) {
 
         const getQuests = () => {
             const q = Mods.QuestStore.quests;
-            return q instanceof Map ? [...q.values()] : Object.values(q);
+            return q instanceof Map ? [...q.values()] : Object.values(q || {});
         };
+
+        let waitAttempts = 0;
+        while (getQuests().length === 0 && waitAttempts < 15 && RUNTIME.running) {
+            Logger.log('[System] Waiting for Discord to fetch quests...', 'debug');
+            await sleep(1000);
+            waitAttempts++;
+        }
 
         const { selected, options } = await showQuestPicker(getQuests());
         if (!RUNTIME.running) return;

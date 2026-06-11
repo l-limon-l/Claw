@@ -17,9 +17,9 @@ export const Logger = {
         style.innerHTML = `
             @keyframes slideIn { from { transform: translateY(-10px) scale(0.99); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
             @keyframes fadeOut { from { opacity: 1; max-height: 140px; margin-bottom: 12px; } to { opacity: 0; max-height: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; border-width: 0; } }
-            @keyframes popIn { 0% { opacity: 0; transform: scale(0.97) translateY(5px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
+            @keyframes popIn { 0% { opacity: 0; transform: scale(0.98) translateY(4px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
             @keyframes slideRight { 0% { opacity: 0; transform: translateX(-10px); } 100% { opacity: 1; transform: translateX(0); } }
-            @keyframes flipInX { 0% { opacity: 0; transform: perspective(400px) rotateX(8deg) translateY(8px); } 100% { opacity: 1; transform: perspective(400px) rotateX(0deg) translateY(0); } }
+            @keyframes flipInX { 0% { opacity: 0; transform: perspective(400px) rotateX(6deg) translateY(6px); } 100% { opacity: 1; transform: perspective(400px) rotateX(0deg) translateY(0); } }
             #claw-ui {
                 --bg-base: #08090a;
                 --bg-panel: rgba(10, 11, 14, 0.65);
@@ -54,7 +54,7 @@ export const Logger = {
                 font-family: "Inter Variable", Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
                 font-feature-settings: "cv01", "ss03", "calt", "kern", "liga"; font-weight: 500; letter-spacing: 0.01em;
                 z-index: 99999; box-shadow: var(--shadow-panel);
-                overflow: hidden; animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); display: flex; flex-direction: column;
+                overflow: hidden; animation: slideIn 0.55s cubic-bezier(0.16, 1, 0.3, 1); display: flex; flex-direction: column;
             }
             #claw-head {
                 padding: 18px 20px 16px; display: flex; justify-content: space-between; align-items: flex-start; gap: 14px;
@@ -98,8 +98,8 @@ export const Logger = {
             .summary-item {
                 padding: 12px 10px; border-radius: 10px; border: none;
                 background: var(--bg-surface); display: flex; flex-direction: column; gap: 6px; min-width: 0;
-                box-shadow: var(--shadow-card); transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), background 0.3s ease, box-shadow 0.3s ease;
-                animation: popIn 0.55s cubic-bezier(0.25, 1, 0.5, 1) backwards;
+                box-shadow: var(--shadow-card); transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), background 0.4s ease, box-shadow 0.4s ease;
+                animation: popIn 0.7s cubic-bezier(0.25, 1, 0.5, 1) backwards;
             }
             .summary-item:nth-child(1) { animation-delay: 0.05s; }
             .summary-item:nth-child(2) { animation-delay: 0.1s; }
@@ -136,10 +136,10 @@ export const Logger = {
             .task-card {
                 display: flex; gap: 14px; padding: 16px; background: rgba(255,255,255,0.02);
                 border-radius: 14px; margin-bottom: 12px; border: none;
-                transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1), background 0.3s ease, box-shadow 0.3s ease;
+                transition: transform 0.45s cubic-bezier(0.25, 1, 0.5, 1), background 0.4s ease, box-shadow 0.4s ease;
                 box-shadow: var(--shadow-card);
             }
-            .task-card.animate-in { animation: flipInX 0.55s cubic-bezier(0.25, 1, 0.5, 1); }
+            .task-card.animate-in { animation: flipInX 0.7s cubic-bezier(0.25, 1, 0.5, 1); }
             .task-card:hover { background: rgba(255,255,255,0.04); transform: translateX(3px); box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 8px 24px rgba(0,0,0,0.25); }
             .task-card.active { box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.4), 0 8px 24px rgba(99, 102, 241, 0.15); background: rgba(99, 102, 241, 0.05); }
             .task-card.done { background: rgba(16, 185, 129, 0.03); box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.16); }
@@ -463,10 +463,6 @@ export const Logger = {
         document.getElementById('claw-close').onclick = () => this.toggle();
         document.getElementById('claw-stop').onclick = () => this.shutdown();
         document.addEventListener('keydown', e => (e.key === '>' || (e.shiftKey && e.key === '.')) && this.toggle());
-
-        try { if (Notification.permission === "default") Notification.requestPermission(); } catch (e) {
-            this.log(`[Notification] Request permission failed: ${e.message}`, 'debug');
-        }
 
         this.startTicker();
     },
