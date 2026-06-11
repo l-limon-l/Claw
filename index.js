@@ -7,7 +7,6 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
 
-  // src/config.js
   var CONFIG, SYS, RUNTIME, ICONS, CONST;
   var init_config = __esm({
     "src/config.js"() {
@@ -62,7 +61,6 @@
     }
   });
 
-  // src/utils.js
   var sleep, rnd, Storage, ErrorHandler;
   var init_utils = __esm({
     "src/utils.js"() {
@@ -105,7 +103,6 @@
     }
   });
 
-  // src/discord.js
   function loadModules() {
     try {
       let findStore = function(storeName) {
@@ -317,7 +314,6 @@
     }
   });
 
-  // src/network.js
   var Traffic;
   var init_network = __esm({
     "src/network.js"() {
@@ -384,7 +380,6 @@
     }
   });
 
-  // src/sound.js
   var Sound;
   var init_sound = __esm({
     "src/sound.js"() {
@@ -424,7 +419,6 @@
     }
   });
 
-  // src/quests.js
   var Tasks;
   var init_quests = __esm({
     "src/quests.js"() {
@@ -803,7 +797,6 @@
     }
   });
 
-  // src/logger.js
   var Logger;
   var init_logger = __esm({
     "src/logger.js"() {
@@ -1470,7 +1463,6 @@
     }
   });
 
-  // src/main.js
   var require_main = __commonJS({
     "src/main.js"() {
       init_config();

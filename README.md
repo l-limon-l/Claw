@@ -1,6 +1,6 @@
 <div align="center">
 
-# ⚡ CLAW
+# ⚡ CLAW (Cloud Edition)
 
 **The ultimate zero-dependency quest automation engine for Discord.**
 
@@ -15,8 +15,9 @@
 
 ## ✨ Why Claw?
 
-Unlike heavy desktop applications or sketchy executables, Claw runs entirely within Discord's own Developer Console. 
+No need to open Developer Tools, copy-paste code, or install heavy Node.js dependencies. Claw now runs using a self-contained, automated injector that fetches the latest code directly from the cloud.
 
+- **One-Click Cloud Injection:** Simply run the batch file. It automatically restarts Discord in debug mode, downloads the latest Claw payload from GitHub, and injects it seamlessly.
 - **Premium Glass UI:** A beautiful, draggable dashboard featuring glassmorphism, dynamic 3D animations, and neon gradients, built to feel like a native app.
 - **Quest Picker:** Don't want to run everything? Selectively filter, select, and run only the quests you want.
 - **Smart Automation:** Toggle auto-enroll, auto-claim, and completion sounds right from the dashboard.
@@ -28,19 +29,14 @@ Unlike heavy desktop applications or sketchy executables, Claw runs entirely wit
 
 ## 🚀 Quick Start
 
-Standard Discord locks the Developer Console by default. We've included a streamlined script to safely unlock it.
+Using Claw is now easier than ever. You only need a single file.
 
-### Step 1: Unlock the Console
-Locate and double-click the **`enable-devtools.bat`** (or `.reg`) file included in this repository. 
-> *This automatically enables the developer tools (on Stable, PTB, and Canary) and restarts the app for you.*
+### Step 1: Download the Injector
+Download the **`start_claw.bat`** file from this repository to your computer.
 
-### Step 2: Inject the Engine
-Open the **[`index.js`](https://raw.githubusercontent.com/l-limon-l/Claw/refs/heads/main/index.js)** file in your browser, select all the text (`Ctrl + A`), and copy it (`Ctrl + C`).
-
-### Step 3: Launch
-1. Inside Discord, press `Ctrl + Shift + I` to open the Developer Tools.
-2. Click on the **Console** tab at the top.
-3. Paste the code and hit **Enter**.
+### Step 2: Run it!
+Double-click **`start_claw.bat`**. 
+> *The script will automatically close your current Discord session, launch a fresh instance with remote debugging enabled, and inject the Claw engine straight from the cloud. Once the console says `Injection successful!`, you can close the black terminal window.*
 
 <br/>
 
@@ -55,6 +51,15 @@ Once injected, Claw runs quietly in the background. A beautiful, draggable dashb
 | **Live Logs** | Click on **Activity Log** to expand/collapse the live console. |
 | **Claim Rewards** | Click the **Claim** button directly on the quest card when a task finishes. |
 | **Stop Engine** | Click the red **Stop** icon in the UI to gracefully shut down Claw. |
+
+<br/>
+
+## 🛠️ For Developers
+
+If you want to modify Claw's source code:
+1. Edit the files in `src/`.
+2. Re-bundle the code by running `npx esbuild src/main.js --bundle --outfile=index.js --format=iife --target=es2020`.
+3. Push your changes to GitHub. The `start_claw.bat` script is hardcoded to pull from `https://raw.githubusercontent.com/l-limon-l/Claw/main/index.js`, so all your users will automatically receive the latest update!
 
 <br/>
 

@@ -62,7 +62,7 @@ if (window.clawLock) {
             const meta = rt => REWARD_META[rt] ?? REWARD_FALLBACK;
 
             if (!items.length) {
-                // If there are no incomplete quests, we render the options but no quest list
+
                 body.innerHTML = `
                     <div style="padding: 16px; text-align: center; color: var(--text-tertiary); font-size: 13px; margin-bottom: 8px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 24px;">
                         <div style="margin-bottom: 12px; opacity: 0.7;">${ICONS.CHECK}</div>
