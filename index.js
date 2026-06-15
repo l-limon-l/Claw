@@ -35,7 +35,8 @@
         autoEnroll: true,
         autoClaim: false,
         playSound: false,
-        notify: false
+        notify: false,
+        randomDelay: false
       };
       ICONS = Object.freeze({
         BOLT: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.29-.62L14.5 3h1l-1 7h3.5c.58 0 .57.32.29.62L11 21z"/></svg>`,
@@ -105,7 +106,7 @@
 
   function loadModules() {
     try {
-      let findStore = function(storeName) {
+      let findStore = function (storeName) {
         for (const m of modules) {
           try {
             const exp = m?.exports;
@@ -120,7 +121,7 @@
           }
         }
         return void 0;
-      }, findDispatcher = function() {
+      }, findDispatcher = function () {
         for (const m of modules) {
           try {
             const exp = m?.exports;
@@ -135,7 +136,7 @@
           }
         }
         return void 0;
-      }, findAPI = function() {
+      }, findAPI = function () {
         for (const m of modules) {
           try {
             const exp = m?.exports;
@@ -150,7 +151,7 @@
           }
         }
         return void 0;
-      }, findRouter = function() {
+      }, findRouter = function () {
         for (const m of modules) {
           try {
             const exp = m?.exports;
@@ -430,6 +431,8 @@
       init_sound();
       Tasks = {
         skipped: /* @__PURE__ */ new Set(),
+        _relayChecked: false,
+        _relayUrl: 'http://127.0.0.1:43210',
         sanitize(name) {
           return name.replace(/[^a-zA-Z0-9 ]/g, "").trim().replace(/\s+/g, " ");
         },
@@ -491,6 +494,164 @@
           Logger.log(`[Task] Aborted "${t.name}": ${reason}`, "err");
           Tasks.skipped.add(q.id);
           setTimeout(() => Logger.removeTask(q.id), 2e3);
+        },
+        async _probeRelay() {
+          if (this._relayChecked) return this._relayAvailable;
+          this._relayChecked = true;
+          try {
+            const r = await Promise.race([
+              fetch(`${this._relayUrl}/health`, { method: 'GET' }),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('probe timeout')), 800))
+            ]);
+            this._relayAvailable = r.ok;
+            if (r.ok) Logger.log('[Bypass] Claw Relay detected on 127.0.0.1:43210.', 'info');
+          } catch (_) {
+            this._relayAvailable = false;
+          }
+          return this._relayAvailable;
+        },
+        async _bypassPost(url, headers, jsonBody) {
+          if (await this._probeRelay()) {
+            const r = await fetch(`${this._relayUrl}/proxy`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url, headers, body: jsonBody })
+            });
+            if (!r.ok) throw { status: r.status, body: await r.text() };
+            const result = await r.json();
+            if (!result.ok) throw { status: result.status, body: result.body };
+            return result;
+          }
+
+          try {
+            const helper = window.VencordNative?.pluginHelpers?.OrionQuests;
+            if (helper) {
+              const u = new URL(url);
+              const appId = u.hostname.split('.')[0];
+              const questId = headers['X-Discord-Quest-ID'];
+              const referrer = headers['Referer'];
+              if (u.pathname.endsWith('/acf/authorize')) {
+                const { code } = JSON.parse(jsonBody);
+                const r = await helper.discordsaysAuthorize({ appId, questId, authCode: code, referrer });
+                if (!r.ok) throw { status: r.status, body: r.body };
+                return { ok: true, status: r.status, body: r.body };
+              }
+              if (u.pathname.endsWith('/acf/quest/progress')) {
+                const { progress } = JSON.parse(jsonBody);
+                const token = headers['X-Auth-Token'];
+                const r = await helper.discordsaysProgress({ appId, questId, token, target: progress, referrer });
+                if (!r.ok) throw { status: r.status, body: r.body };
+                return { ok: true, status: r.status, body: r.body };
+              }
+            }
+          } catch (e) {
+            if (e?.status) throw e;
+            Logger.log(`[Bypass] VencordNative path errored: ${e?.message ?? e}`, 'debug');
+          }
+
+          const dn = window.DiscordNative;
+          if (dn) {
+            const probes = [
+              () => dn.http?.makeRequest,
+              () => dn.fileManager?.fetchURL,
+              () => dn.processUtils?.fetch,
+              () => dn.app?.makeRequest,
+            ];
+            for (const probe of probes) {
+              try {
+                const fn = probe();
+                if (typeof fn === 'function') {
+                  const r = await fn.call(dn, { method: 'POST', url, headers, body: jsonBody });
+                  if (r && (r.status || r.statusCode)) {
+                    const status = r.status ?? r.statusCode;
+                    return { ok: status >= 200 && status < 300, status, body: r.body ?? r.responseText ?? '' };
+                  }
+                }
+              } catch (_) { }
+            }
+          }
+
+          const res = await fetch(url, { method: 'POST', headers, body: jsonBody });
+          const body = await res.text();
+          if (!res.ok) throw { status: res.status, body };
+          return { ok: true, status: res.status, body };
+        },
+        async bypassAchievement(q, t) {
+          const appId = q.config?.application?.id;
+          if (!appId) return false;
+          try {
+            Logger.log(`[Bypass] Trying Discord Says auth flow for "${t.name}"...`, 'info');
+
+            const authRes = await Mods.API.post({
+              url: '/oauth2/authorize',
+              query: {
+                response_type: 'code',
+                client_id: appId,
+                scope: 'identify applications.commands applications.entitlements'
+              },
+              body: {
+                permissions: '0',
+                authorize: true,
+                integration_type: 1,
+                location_context: { guild_id: '10000', channel_id: '10000', channel_type: 10000 }
+              }
+            });
+            const location = authRes?.body?.location;
+            if (!location) throw new Error('no location in /oauth2/authorize response');
+            const authCode = new URL(location).searchParams.get('code');
+            if (!authCode) throw new Error('no code in authorize location');
+
+            const ticketRes = await Mods.API.post({ url: `/applications/${appId}/proxy-tickets`, body: {} });
+            const proxyTicket = ticketRes?.body?.ticket;
+            if (!proxyTicket) throw new Error('no proxy ticket');
+
+            const referrer = `https://${appId}.discordsays.com/?instance_id=example-cl-instance&platform=desktop&discord_proxy_ticket=${encodeURIComponent(proxyTicket)}`;
+
+            const dsAuthRes = await Tasks._bypassPost(
+              `https://${appId}.discordsays.com/.proxy/acf/authorize`,
+              { 'Content-Type': 'application/json', 'X-Auth-Token': '', 'X-Discord-Quest-ID': q.id, 'Referer': referrer },
+              JSON.stringify({ code: authCode })
+            );
+            const { token: dsToken } = JSON.parse(dsAuthRes.body);
+            if (!dsToken) throw new Error('no discordsays token');
+
+            await Tasks._bypassPost(
+              `https://${appId}.discordsays.com/.proxy/acf/quest/progress`,
+              { 'Content-Type': 'application/json', 'X-Auth-Token': dsToken, 'X-Discord-Quest-ID': q.id, 'Referer': referrer },
+              JSON.stringify({ progress: t.target })
+            );
+
+            Logger.log(`[Bypass] Success — "${t.name}" completed via Discord Says.`, 'success');
+
+            try {
+              const tokens = await Mods.API.get({ url: '/oauth2/tokens' });
+              const grant = (tokens?.body || []).find(tk => tk.application?.id === appId);
+              if (grant) await Mods.API.del({ url: `/oauth2/tokens/${grant.id}` });
+            } catch (e) {
+              Logger.log(`[Bypass] Deauthorize cleanup non-fatal: ${e?.message}`, 'debug');
+            }
+
+            return true;
+          } catch (e) {
+            if (e instanceof TypeError && /failed to fetch|networkerror/i.test(e.message)) {
+              Logger.log(`[Bypass] Discord's CSP blocks the script from reaching discordsays.com. Use the Vencord plugin port for the auto-bypass — userscript can't bypass CSP. Skipping "${t.name}".`, 'warn');
+              return false;
+            }
+            const code = e?.body?.code;
+            if (code === 50165) {
+              Logger.log(`[Bypass] "${t.name}" can't be launched (age-gated or delisted). Discord blocks the proxy ticket — nothing we can do.`, 'warn');
+              return false;
+            }
+            const parts = [];
+            if (e?.status) parts.push(`HTTP ${e.status}`);
+            if (code) parts.push(`code ${code}`);
+            if (e?.body?.message) parts.push(e.body.message);
+            else if (e?.message) parts.push(e.message);
+            else if (typeof e === 'string') parts.push(e);
+            else if (e) { try { parts.push(JSON.stringify(e).slice(0, 200)); } catch { parts.push(String(e)); } }
+            Logger.log(`[Bypass] Failed: ${parts.join(' — ') || 'unknown'}`, 'warn');
+            return false;
+          }
         },
         async VIDEO(q, t, s) {
           let cur = s?.progress?.[t.keyName]?.value ?? s?.progress?.[t.type]?.value ?? 0;
@@ -660,11 +821,11 @@
                 failCount++;
                 const err = ErrorHandler.classify(e);
                 if (err.isClientError) {
-                  Logger.log(`[Achievement] Heartbeat rejected (HTTP ${err.status}). Falling back to passive mode.`, "warn");
+                  Logger.log(`[Achievement] Heartbeat rejected (HTTP ${err.status}). Falling back to bypass mode.`, "warn");
                   break;
                 }
                 if (failCount >= SYS.MAX_TASK_FAILURES) {
-                  Logger.log(`[Achievement] Too many failures. Falling back to passive mode.`, "warn");
+                  Logger.log(`[Achievement] Too many failures. Falling back to bypass mode.`, "warn");
                   break;
                 }
               }
@@ -672,9 +833,15 @@
             }
             if (cur >= t.target && RUNTIME.running) return Tasks.finish(q, t);
           }
+
           if (!RUNTIME.running) return;
-          Logger.log(`[Task] Action required: Join Activity to earn "${t.name}"`, "warn");
+          const bypassed = await Tasks.bypassAchievement(q, t);
+          if (bypassed) return Tasks.finish(q, t);
+
+          if (!RUNTIME.running) return;
+          Logger.log(`[Task] Action required: Join Activity to earn "${t.name}" manually. Bypass failed.`, "warn");
           Logger.updateTask(q.id, { name: t.name, type: "ACHIEVEMENT", cur: 0, max: t.target, status: "RUNNING", actionRequired: true });
+
           return new Promise((resolve) => {
             let cleaned = false;
             let safetyTimer;
@@ -1475,7 +1642,7 @@
       if (window.clawLock) {
         console.warn("[Claw] Script is already running or didn't shut down properly. Please reload Discord (Ctrl+R).");
       } else {
-        let showQuestPicker = function(quests) {
+        let showQuestPicker = function (quests) {
           return new Promise((resolve) => {
             const body = document.getElementById("claw-body");
             const incomplete = quests.filter(
@@ -1523,6 +1690,10 @@
                         <div class="claw-option">
                             <span class="claw-option-label">Desktop notifications</span>
                             <label class="claw-toggle"><input type="checkbox" id="opt-notify"><span class="slider"></span></label>
+                        </div>
+                        <div class="claw-option">
+                            <span class="claw-option-label">Random delay (anti-detect)</span>
+                            <label class="claw-toggle"><input type="checkbox" id="opt-delay"><span class="slider"></span></label>
                         </div>
                     </div>
                     <div class="quest-pick-actions">
@@ -1572,6 +1743,10 @@
                             <div class="claw-option">
                                 <span class="claw-option-label">Desktop notifications</span>
                                 <label class="claw-toggle"><input type="checkbox" id="opt-notify"><span class="slider"></span></label>
+                            </div>
+                            <div class="claw-option">
+                                <span class="claw-option-label">Random delay (anti-detect)</span>
+                                <label class="claw-toggle"><input type="checkbox" id="opt-delay"><span class="slider"></span></label>
                             </div>
                         </div>
                         <div class="quest-pick-actions">
@@ -1634,7 +1809,8 @@
                 autoEnroll: $("#opt-enroll").checked,
                 autoClaim: $("#opt-claim").checked,
                 playSound: $("#opt-sound").checked,
-                notify: $("#opt-notify").checked
+                notify: $("#opt-notify").checked,
+                randomDelay: $("#opt-delay").checked
               };
               if (options.notify) {
                 try {
@@ -1690,6 +1866,7 @@
             RUNTIME.autoClaim = options.autoClaim;
             RUNTIME.playSound = options.playSound;
             RUNTIME.notify = options.notify;
+            RUNTIME.randomDelay = options.randomDelay;
             Logger.log(`[System] ${selected.size} quest(s) selected. Auto-enroll: ${options.autoEnroll ? "ON" : "OFF"}, Auto-claim: ${options.autoClaim ? "ON" : "OFF"}`, "info");
           } else {
             Logger.log("[System] No quests selected. Shutting down.", "info");
@@ -1785,8 +1962,16 @@
                 }
               }
               if (!RUNTIME.running) break;
-              Logger.log(`[Cycle] Loop #${loopCount} complete. Waiting before rescan...`, "info");
-              await sleep(rnd(2500, 4500));
+
+              if (RUNTIME.randomDelay) {
+                const delayMs = rnd(60000, 1800000);
+                Logger.log(`[Cycle] Loop #${loopCount} complete. Random delay: ${Math.round(delayMs / 60000)}m before rescan.`, 'info');
+                await sleep(delayMs);
+              } else {
+                Logger.log(`[Cycle] Loop #${loopCount} complete. Waiting before rescan...`, "info");
+                await sleep(rnd(2500, 4500));
+              }
+
               loopCount++;
             } catch (cycleError) {
               Logger.log(`[Cycle] Error in loop #${loopCount}: ${cycleError?.message ?? cycleError}`, "err");
