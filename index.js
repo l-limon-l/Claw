@@ -1409,8 +1409,6 @@
             #claw-ui.claw-light .ctrl-stop:hover { background: rgba(239,68,68,0.08); }
             #claw-ui.claw-light #claw-logs-wrap { background: rgba(0,0,0,0.02); }
             #claw-ui.claw-light .progress-track { background: rgba(0,0,0,0.08); border-color: rgba(0,0,0,0.06); }
-            #claw-ui.claw-light .claw-toggle .slider { background: rgba(0,0,0,0.1); border-color: rgba(0,0,0,0.15); }
-            #claw-ui.claw-light .claw-toggle .slider::before { background: #6d6f78; }
             #claw-ui.claw-light .quest-pick-btn.toggle { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); }
             #claw-ui.claw-light .dev-badge { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.08); }
             #claw-ui.claw-light #claw-footer { background: rgba(0,0,0,0.02); }
