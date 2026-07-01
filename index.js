@@ -1086,7 +1086,7 @@
                 z-index: 99999; box-shadow: var(--shadow-panel);
                 overflow: hidden; animation: slideIn 0.55s cubic-bezier(0.16, 1, 0.3, 1); display: flex; flex-direction: column;
             }
-            .theme-light #claw-ui {
+            #claw-ui.claw-light {
                 --bg-base: #f8fafc;
                 --bg-panel: rgba(255, 255, 255, 0.55);
                 --bg-surface: rgba(0, 0, 0, 0.03);
