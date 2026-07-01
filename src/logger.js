@@ -47,6 +47,8 @@ export const Logger = {
                 --radius-pill: 100px;
                 --shadow-panel: 0 0 0 1px rgba(255,255,255,0.05), 0 32px 84px rgba(0,0,0,0.65), 0 12px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06);
                 --shadow-card: 0 0 0 1px rgba(255,255,255,0.04), 0 4px 12px rgba(0,0,0,0.2);
+                --toggle-bg: rgba(255, 255, 255, 0.08);
+                --toggle-knob: var(--text-secondary);
                 position: fixed; top: ${savedPos.top}; left: ${savedPos.left}; right: ${savedPos.right}; width: 440px;
                 background: var(--bg-panel);
                 backdrop-filter: blur(32px) saturate(180%); -webkit-backdrop-filter: blur(32px) saturate(180%);
@@ -55,6 +57,27 @@ export const Logger = {
                 font-feature-settings: "cv01", "ss03", "calt", "kern", "liga"; font-weight: 500; letter-spacing: 0.01em;
                 z-index: 99999; box-shadow: var(--shadow-panel);
                 overflow: hidden; animation: slideIn 0.55s cubic-bezier(0.16, 1, 0.3, 1); display: flex; flex-direction: column;
+            }
+            #claw-ui.claw-light {
+                --bg-base: #f8fafc;
+                --bg-panel: rgba(255, 255, 255, 0.4);
+                backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+                --bg-surface: rgba(0, 0, 0, 0.03);
+                --bg-surface-hover: rgba(0, 0, 0, 0.06);
+                --bg-elevated: rgba(255, 255, 255, 0.95);
+                --text-primary: #0f172a;
+                --text-secondary: #334155;
+                --text-tertiary: #64748b;
+                --text-quaternary: #94a3b8;
+                --border-subtle: rgba(0, 0, 0, 0.06);
+                --border-standard: rgba(0, 0, 0, 0.1);
+                --accent: #4f46e5;
+                --accent-bright: #6366f1;
+                --accent-hover: #4338ca;
+                --shadow-panel: 0 0 0 1px rgba(0,0,0,0.05), 0 32px 84px rgba(0,0,0,0.1), 0 12px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1);
+                --shadow-card: 0 0 0 1px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.05);
+                --toggle-bg: rgba(0, 0, 0, 0.15);
+                --toggle-knob: #ffffff;
             }
             #claw-head {
                 padding: 18px 20px 16px; display: flex; justify-content: space-between; align-items: flex-start; gap: 14px;
@@ -253,8 +276,8 @@ export const Logger = {
             .claw-option-label { font-size: 12px; color: var(--text-secondary); }
             .claw-toggle { position: relative; width: 36px; height: 20px; cursor: pointer; }
             .claw-toggle input { opacity: 0; width: 0; height: 0; }
-            .claw-toggle .slider { position: absolute; inset: 0; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--border-standard); border-radius: 10px; transition: 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
-            .claw-toggle .slider::before { content: ''; position: absolute; height: 14px; width: 14px; left: 2px; bottom: 2px; background: var(--text-secondary); border-radius: 50%; transition: 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+            .claw-toggle .slider { position: absolute; inset: 0; background: var(--toggle-bg); border: 1px solid var(--border-standard); border-radius: 10px; transition: 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+            .claw-toggle .slider::before { content: ''; position: absolute; height: 14px; width: 14px; left: 2px; bottom: 2px; background: var(--toggle-knob); border-radius: 50%; transition: 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); box-shadow: 0 1px 2px rgba(0,0,0,0.15); }
             .claw-toggle input:checked + .slider { background: linear-gradient(135deg, var(--accent), var(--accent-bright)); border-color: transparent; }
             .claw-toggle input:checked + .slider::before { transform: translateX(16px); background: #fff; box-shadow: 0 0 8px rgba(255, 255, 255, 0.4); }
 
@@ -359,8 +382,6 @@ export const Logger = {
             #claw-ui.claw-light .ctrl-stop:hover { background: rgba(239,68,68,0.08); }
             #claw-ui.claw-light #claw-logs-wrap { background: rgba(0,0,0,0.02); }
             #claw-ui.claw-light .progress-track { background: rgba(0,0,0,0.08); border-color: rgba(0,0,0,0.06); }
-            #claw-ui.claw-light .claw-toggle .slider { background: rgba(0,0,0,0.1); border-color: rgba(0,0,0,0.15); }
-            #claw-ui.claw-light .claw-toggle .slider::before { background: #6d6f78; }
             #claw-ui.claw-light .quest-pick-btn.toggle { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); }
             #claw-ui.claw-light .dev-badge { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.08); }
             #claw-ui.claw-light #claw-footer { background: rgba(0,0,0,0.02); }
