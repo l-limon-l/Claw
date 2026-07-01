@@ -1084,6 +1084,24 @@
                 z-index: 99999; box-shadow: var(--shadow-panel);
                 overflow: hidden; animation: slideIn 0.55s cubic-bezier(0.16, 1, 0.3, 1); display: flex; flex-direction: column;
             }
+            .theme-light #claw-ui {
+                --bg-base: #f8fafc;
+                --bg-panel: rgba(255, 255, 255, 0.85);
+                --bg-surface: rgba(0, 0, 0, 0.03);
+                --bg-surface-hover: rgba(0, 0, 0, 0.06);
+                --bg-elevated: rgba(255, 255, 255, 0.95);
+                --text-primary: #0f172a;
+                --text-secondary: #334155;
+                --text-tertiary: #64748b;
+                --text-quaternary: #94a3b8;
+                --border-subtle: rgba(0, 0, 0, 0.06);
+                --border-standard: rgba(0, 0, 0, 0.1);
+                --accent: #4f46e5;
+                --accent-bright: #6366f1;
+                --accent-hover: #4338ca;
+                --shadow-panel: 0 0 0 1px rgba(0,0,0,0.05), 0 32px 84px rgba(0,0,0,0.1), 0 12px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1);
+                --shadow-card: 0 0 0 1px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.05);
+            }
             #claw-head {
                 padding: 18px 20px 16px; display: flex; justify-content: space-between; align-items: flex-start; gap: 14px;
                 border-bottom: 1px solid var(--border-subtle); background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 100%); cursor: grab; user-select: none;
