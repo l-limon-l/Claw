@@ -1075,6 +1075,8 @@
                 --radius-pill: 100px;
                 --shadow-panel: 0 0 0 1px rgba(255,255,255,0.05), 0 32px 84px rgba(0,0,0,0.65), 0 12px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06);
                 --shadow-card: 0 0 0 1px rgba(255,255,255,0.04), 0 4px 12px rgba(0,0,0,0.2);
+                --toggle-bg: rgba(255, 255, 255, 0.08);
+                --toggle-knob: var(--text-secondary);
                 position: fixed; top: ${savedPos.top}; left: ${savedPos.left}; right: ${savedPos.right}; width: 440px;
                 background: var(--bg-panel);
                 backdrop-filter: blur(32px) saturate(180%); -webkit-backdrop-filter: blur(32px) saturate(180%);
@@ -1086,7 +1088,7 @@
             }
             .theme-light #claw-ui {
                 --bg-base: #f8fafc;
-                --bg-panel: rgba(255, 255, 255, 0.85);
+                --bg-panel: rgba(255, 255, 255, 0.55);
                 --bg-surface: rgba(0, 0, 0, 0.03);
                 --bg-surface-hover: rgba(0, 0, 0, 0.06);
                 --bg-elevated: rgba(255, 255, 255, 0.95);
@@ -1101,6 +1103,8 @@
                 --accent-hover: #4338ca;
                 --shadow-panel: 0 0 0 1px rgba(0,0,0,0.05), 0 32px 84px rgba(0,0,0,0.1), 0 12px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1);
                 --shadow-card: 0 0 0 1px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.05);
+                --toggle-bg: rgba(0, 0, 0, 0.15);
+                --toggle-knob: #ffffff;
             }
             #claw-head {
                 padding: 18px 20px 16px; display: flex; justify-content: space-between; align-items: flex-start; gap: 14px;
@@ -1299,8 +1303,8 @@
             .claw-option-label { font-size: 12px; color: var(--text-secondary); }
             .claw-toggle { position: relative; width: 36px; height: 20px; cursor: pointer; }
             .claw-toggle input { opacity: 0; width: 0; height: 0; }
-            .claw-toggle .slider { position: absolute; inset: 0; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--border-standard); border-radius: 10px; transition: 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
-            .claw-toggle .slider::before { content: ''; position: absolute; height: 14px; width: 14px; left: 2px; bottom: 2px; background: var(--text-secondary); border-radius: 50%; transition: 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+            .claw-toggle .slider { position: absolute; inset: 0; background: var(--toggle-bg); border: 1px solid var(--border-standard); border-radius: 10px; transition: 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+            .claw-toggle .slider::before { content: ''; position: absolute; height: 14px; width: 14px; left: 2px; bottom: 2px; background: var(--toggle-knob); border-radius: 50%; transition: 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); box-shadow: 0 1px 2px rgba(0,0,0,0.15); }
             .claw-toggle input:checked + .slider { background: linear-gradient(135deg, var(--accent), var(--accent-bright)); border-color: transparent; }
             .claw-toggle input:checked + .slider::before { transform: translateX(16px); background: #fff; box-shadow: 0 0 8px rgba(255, 255, 255, 0.4); }
 
