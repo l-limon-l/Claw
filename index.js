@@ -1088,7 +1088,8 @@
             }
             #claw-ui.claw-light {
                 --bg-base: #f8fafc;
-                --bg-panel: rgba(255, 255, 255, 0.15);
+                --bg-panel: rgba(255, 255, 255, 0.4);
+                backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
                 --bg-surface: rgba(0, 0, 0, 0.03);
                 --bg-surface-hover: rgba(0, 0, 0, 0.06);
                 --bg-elevated: rgba(255, 255, 255, 0.95);
