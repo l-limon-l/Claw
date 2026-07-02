@@ -10,7 +10,7 @@
 **CLAW** is the ultimate zero-dependency quest automation engine for Discord. It instantly auto-completes Game, Video, Stream, Activity, and Achievement quests right from a sleek, built-in dashboard.
 
 ### 🚀 Features
-- **One-Click Cloud Injection**: Simply run the batch file. It automatically restarts Discord in debug mode, downloads the latest Claw payload from GitHub, and injects it seamlessly.
+- **One-Click Cloud Injection**: Simply run the executable. It automatically restarts Discord in debug mode, downloads the latest Claw payload from GitHub, and injects it seamlessly.
 - **Premium Glass UI**: A beautiful, draggable dashboard featuring glassmorphism, dynamic animations, and responsive themes, built to feel like a native app.
 - **Quest Picker**: Don't want to run everything? Selectively filter, select, and run only the quests you want.
 - **Smart Automation**: Toggle auto-enroll, auto-claim, and completion sounds right from the dashboard.
@@ -20,12 +20,12 @@
 ### 🛠️ Tech Stack
 - JavaScript (ES2020)
 - esbuild
-- Windows Batch Scripting
+
 
 ### 📦 Installation & Usage
-1. Download the `start_claw.bat` file from this repository to your computer.
-2. Double-click `start_claw.bat`.
-   *(The script will automatically close your current Discord session, launch a fresh instance with remote debugging enabled, and inject the Claw engine straight from the cloud. Once the console says `Injection successful!`, you can close the black terminal window.)*
+1. Download the latest `.exe` from the [Releases page](https://github.com/l-limon-l/Claw/releases/tag/Main).
+2. Run the downloaded file.
+   *(The application will automatically close your current Discord session, launch a fresh instance with remote debugging enabled, and inject the Claw engine straight from the cloud.)*
 
 **Controls:**
 - **Toggle Dashboard (`Shift + .`)**: Show or hide the UI at any time.
@@ -43,7 +43,7 @@
 **CLAW** — это ультимативный движок автоматизации квестов для Discord без сторонних зависимостей. Он мгновенно и автоматически выполняет игровые, видео, стриминговые и другие квесты прямо из встроенного красивого дашборда.
 
 ### 🚀 Особенности
-- **Инъекция из облака в один клик**: Просто запустите bat-файл. Он перезапустит Discord в режиме отладки, скачает свежий код Claw с GitHub и бесшовно внедрит его.
+- **Инъекция из облака в один клик**: Просто запустите exe-файл. Он перезапустит Discord в режиме отладки, скачает свежий код Claw с GitHub и бесшовно внедрит его.
 - **Премиальный Glass UI**: Красивый перемещаемый дашборд с эффектом глассморфизма и анимациями, ощущающийся как нативное приложение.
 - **Выбор квестов**: Не хотите выполнять всё подряд? Выбирайте и фильтруйте нужные квесты вручную.
 - **Умная автоматизация**: Включайте авто-принятие, авто-сбор наград и звуковые уведомления прямо в интерфейсе.
@@ -53,12 +53,12 @@
 ### 🛠️ Стек технологий
 - JavaScript (ES2020)
 - esbuild
-- Windows Batch Scripting
+
 
 ### 📦 Установка и запуск
-1. Скачайте файл `start_claw.bat` из этого репозитория на свой ПК.
-2. Запустите `start_claw.bat`.
-   *(Скрипт закроет ваш Discord, запустит его с включенной удаленной отладкой и внедрит Claw прямо из облака. Когда в консоли появится надпись `Injection successful!`, черное окно можно закрыть.)*
+1. Скачайте последний `.exe` файл со страницы [Releases](https://github.com/l-limon-l/Claw/releases/tag/Main).
+2. Запустите скачанный файл.
+   *(Приложение само закроет ваш Discord, запустит его с включенной удаленной отладкой и внедрит Claw прямо из облака.)*
 
 **Управление:**
 - **Показать/Скрыть дашборд (`Shift + .`)**: Открывает интерфейс в любой момент.
