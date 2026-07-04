@@ -2,3 +2,7 @@ node_modules/
 scratch/
 CloudStart/
 .env
+/Claw.exe
+loader-csharp/bin/
+loader-csharp/obj/
+loader-csharp/publish/

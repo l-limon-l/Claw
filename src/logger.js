@@ -521,9 +521,11 @@ export const Logger = {
 
                     this.updateTask(questId, { ...taskData, status: "CLAIMED", claimable: false, claimState: null });
                     setTimeout(() => this.removeTask(questId), 2000);
+                    return;
                 }
+                throw new Error(claimRes?.body?.message ?? 'Claim response did not include claimed_at');
             } catch (err) {
-                this.log(`[Claim] Action required for "${taskData.name}". Check Discord UI for captcha.`, 'warn');
+                this.log(`[Claim] Action required for "${taskData.name}": ${err?.body?.message ?? err?.message ?? 'check Discord UI'}`, 'warn');
                 this.updateTask(questId, { ...taskData, claimState: 'FAILED' });
             }
         });

@@ -45,8 +45,7 @@
         autoEnroll: true,
         autoClaim: false,
         playSound: false,
-        notify: false,
-        randomDelay: false
+        notify: false
       };
       ICONS = Object.freeze({
         BOLT: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.29-.62L14.5 3h1l-1 7h3.5c.58 0 .57.32.29.62L11 21z"/></svg>`,
@@ -121,7 +120,8 @@
   });
 
   // src/discord.js
-  function loadModules() {
+  function loadModules(options = {}) {
+    const quiet = options.quiet === true;
     try {
       let findStore = function(storeName) {
         for (const m of modules) {
@@ -184,7 +184,7 @@
         return void 0;
       };
       if (typeof window.Vencord !== "undefined" && window.Vencord.Webpack) {
-        Logger.log("[System] Vencord detected. Using Vencord Webpack API...", "info");
+        if (!quiet) Logger.log("[System] Vencord detected. Using Vencord Webpack API...", "info");
         const W = window.Vencord.Webpack;
         let routerModule;
         try {
@@ -214,12 +214,12 @@
         if (missing2.length === 0) {
           const optional2 = ["StreamStore", "ChanStore", "GuildChanStore", "Router"];
           optional2.forEach((k) => {
-            if (!Mods[k]) Logger.log(`[System] Optional module '${k}' not found. Features may be limited.`, "warn");
+            if (!quiet && !Mods[k]) Logger.log(`[System] Optional module '${k}' not found. Features may be limited.`, "warn");
           });
           Patcher.init(Mods.RunStore);
           return true;
         }
-        Logger.log(`[System] Vencord extraction missed: ${missing2.join(", ")}. Falling back to native...`, "warn");
+        if (!quiet) Logger.log(`[System] Vencord extraction missed: ${missing2.join(", ")}. Falling back to native...`, "warn");
       }
       if (typeof webpackChunkdiscord_app === "undefined") throw new Error("Webpack chunk not found");
       let req;
@@ -246,12 +246,12 @@
       if (missing.length > 0) throw new Error(`Core modules not found: ${missing.join(", ")}`);
       const optional = ["StreamStore", "ChanStore", "GuildChanStore", "Router"];
       optional.forEach((k) => {
-        if (!Mods[k]) Logger.log(`[System] Optional module '${k}' not found. Features may be limited.`, "warn");
+        if (!quiet && !Mods[k]) Logger.log(`[System] Optional module '${k}' not found. Features may be limited.`, "warn");
       });
       Patcher.init(Mods.RunStore);
       return true;
     } catch (e) {
-      Logger.log(`[System] Module loading error: ${e.message ?? e}`, "err");
+      if (!quiet) Logger.log(`[System] Module loading error: ${e.message ?? e}`, "err");
       return false;
     }
   }
@@ -530,18 +530,23 @@
         detectType(cfg, applicationId) {
           const taskKeys = Object.keys(cfg.tasks);
           const typeMap = [
-            { key: "PLAY", type: "GAME" },
-            { key: "STREAM", type: "STREAM" },
-            { key: "VIDEO", type: "WATCH_VIDEO" },
             { key: "ACHIEVEMENT_IN_ACTIVITY", type: "ACHIEVEMENT" },
-            { key: "ACTIVITY", type: "ACTIVITY" }
+            { key: "PLAY_ACTIVITY", type: "ACTIVITY" },
+            { key: "WATCH_VIDEO", type: "WATCH_VIDEO" },
+            { key: "STREAM_ON_DESKTOP", type: "STREAM" },
+            { key: "PLAY_ON_DESKTOP", type: "GAME" },
+            { key: "ACTIVITY", type: "ACTIVITY" },
+            { key: "VIDEO", type: "WATCH_VIDEO" },
+            { key: "STREAM", type: "STREAM" },
+            { key: "PLAY", type: "GAME" }
           ];
           for (const { key, type } of typeMap) {
             const keyName = taskKeys.find((k) => k.includes(key));
             if (keyName) return { type, keyName, target: cfg.tasks[keyName]?.target ?? 0 };
           }
           if (applicationId) {
-            return { type: "GAME", keyName: "PLAY_ON_DESKTOP", target: cfg.tasks[taskKeys[0]]?.target ?? 0 };
+            const keyName = taskKeys[0];
+            return { type: "GAME", keyName, target: cfg.tasks[keyName]?.target ?? 0 };
           }
           return null;
         },
@@ -793,10 +798,10 @@
           }
         },
         GAME(q, t, s) {
-          return Tasks.generic(q, t, "GAME", "PLAY_ON_DESKTOP", s);
+          return Tasks.generic(q, t, "GAME", t.keyName, s);
         },
         STREAM(q, t, s) {
-          return Tasks.generic(q, t, "STREAM", "STREAM_ON_DESKTOP", s);
+          return Tasks.generic(q, t, "STREAM", t.keyName, s);
         },
         async generic(q, t, type, key, s) {
           if (!RUNTIME.running) return;
@@ -981,7 +986,7 @@
           Logger.log(`[Task] Completed "${t.name}"!`, "success");
           Sound.play("tick");
           try {
-            if (typeof Notification !== "undefined") {
+            if (RUNTIME.notify && typeof Notification !== "undefined") {
               if (Notification.permission === "default") {
                 try {
                   await Notification.requestPermission();
@@ -1535,9 +1540,11 @@
                 this.log(`[Claim] Reward for "${taskData.name}" claimed successfully!`, "success");
                 this.updateTask(questId, { ...taskData, status: "CLAIMED", claimable: false, claimState: null });
                 setTimeout(() => this.removeTask(questId), 2e3);
+                return;
               }
+              throw new Error(claimRes?.body?.message ?? "Claim response did not include claimed_at");
             } catch (err) {
-              this.log(`[Claim] Action required for "${taskData.name}". Check Discord UI for captcha.`, "warn");
+              this.log(`[Claim] Action required for "${taskData.name}": ${err?.body?.message ?? err?.message ?? "check Discord UI"}`, "warn");
               this.updateTask(questId, { ...taskData, claimState: "FAILED" });
             }
           });
@@ -1820,10 +1827,6 @@
                             <span class="claw-option-label">Desktop notifications</span>
                             <label class="claw-toggle"><input type="checkbox" id="opt-notify"><span class="slider"></span></label>
                         </div>
-                        <div class="claw-option">
-                            <span class="claw-option-label">Random delay (anti-detect)</span>
-                            <label class="claw-toggle"><input type="checkbox" id="opt-delay"><span class="slider"></span></label>
-                        </div>
                     </div>
                     <div class="quest-pick-actions">
                         <button class="quest-pick-btn toggle disabled" id="claw-toggle-all">DESELECT ALL</button>
@@ -1872,10 +1875,6 @@
                             <div class="claw-option">
                                 <span class="claw-option-label">Desktop notifications</span>
                                 <label class="claw-toggle"><input type="checkbox" id="opt-notify"><span class="slider"></span></label>
-                            </div>
-                            <div class="claw-option">
-                                <span class="claw-option-label">Random delay (anti-detect)</span>
-                                <label class="claw-toggle"><input type="checkbox" id="opt-delay"><span class="slider"></span></label>
                             </div>
                         </div>
                         <div class="quest-pick-actions">
@@ -1934,12 +1933,19 @@
               if (items.length) {
                 $$("input[data-qid]:checked").forEach((cb) => selected.add(cb.dataset.qid));
               }
+              if (items.length && selected.size === 0) {
+                const btn = $("#claw-start-btn");
+                btn.textContent = "SELECT QUESTS";
+                btn.classList.add("disabled");
+                setTimeout(syncStartBtn, 1200);
+                Logger.log("[Picker] Select at least one quest before starting.", "warn");
+                return;
+              }
               const options = {
                 autoEnroll: $("#opt-enroll").checked,
                 autoClaim: $("#opt-claim").checked,
                 playSound: $("#opt-sound").checked,
-                notify: $("#opt-notify").checked,
-                randomDelay: $("#opt-delay")?.checked ?? false
+                notify: $("#opt-notify").checked
               };
               if (options.notify) {
                 try {
@@ -1956,7 +1962,7 @@
               await sleep(250);
               body.innerHTML = Logger.getEmptyStateHTML("System", "Starting up...", "Preparing selected quests.");
               body.classList.remove("fade-out");
-              resolve({ selected, options });
+              resolve({ selected: items.length ? selected : null, options });
             });
           });
         };
@@ -1976,7 +1982,16 @@
         const REWARD_FALLBACK = { label: "Other", color: "var(--text-tertiary)" };
         async function main() {
           Logger.init();
-          if (!loadModules()) return Logger.log("[System] Failed to load Discord modules. Aborting.", "err");
+          let modulesReady = false;
+          for (let attempt = 1; attempt <= 30 && RUNTIME.running; attempt++) {
+            if (loadModules({ quiet: attempt < 30 })) {
+              modulesReady = true;
+              break;
+            }
+            Logger.log(`[System] Discord modules not ready yet (${attempt}/30). Waiting...`, "debug");
+            await sleep(1e3);
+          }
+          if (!modulesReady) return Logger.log("[System] Failed to load Discord modules. Aborting.", "err");
           const getQuests = () => {
             const q = Mods.QuestStore.quests;
             return q instanceof Map ? [...q.values()] : Object.values(q || {});
@@ -1989,18 +2004,13 @@
           }
           const { selected, options } = await showQuestPicker(getQuests());
           if (!RUNTIME.running) return;
-          if (selected !== null) {
-            RUNTIME.selectedQuests = selected;
-            RUNTIME.autoEnroll = options.autoEnroll;
-            RUNTIME.autoClaim = options.autoClaim;
-            RUNTIME.playSound = options.playSound;
-            RUNTIME.notify = options.notify;
-            RUNTIME.randomDelay = options.randomDelay;
-            Logger.log(`[System] ${selected.size} quest(s) selected. Auto-enroll: ${options.autoEnroll ? "ON" : "OFF"}, Auto-claim: ${options.autoClaim ? "ON" : "OFF"}`, "info");
-          } else {
-            Logger.log("[System] No quests selected. Shutting down.", "info");
-            return Logger.shutdown();
-          }
+          RUNTIME.selectedQuests = selected;
+          RUNTIME.autoEnroll = options.autoEnroll;
+          RUNTIME.autoClaim = options.autoClaim;
+          RUNTIME.playSound = options.playSound;
+          RUNTIME.notify = options.notify;
+          const selectedLabel = selected ? `${selected.size} quest(s)` : "all future eligible quests";
+          Logger.log(`[System] ${selectedLabel} selected. Auto-enroll: ${options.autoEnroll ? "ON" : "OFF"}, Auto-claim: ${options.autoClaim ? "ON" : "OFF"}`, "info");
           let loopCount = 1;
           let isIdle = false;
           while (RUNTIME.running) {
@@ -2100,11 +2110,15 @@
               loopCount++;
             }
           }
-          const unclaimed = [...Logger.tasks.values()].some((t) => t.claimable || t.claimState === "WAITING");
-          if (unclaimed) {
+          const hasPendingClaim = () => [...Logger.tasks.values()].some((t) => t.claimable || t.claimState === "WAITING");
+          if (RUNTIME.running && hasPendingClaim()) {
+            const claimWaitUntil = Date.now() + 15e3;
             Logger.log("[System] Waiting for pending reward claims before shutdown...", "info");
-            while ([...Logger.tasks.values()].some((t) => t.claimable || t.claimState === "WAITING")) {
+            while (RUNTIME.running && hasPendingClaim() && Date.now() < claimWaitUntil) {
               await sleep(3e3);
+            }
+            if (RUNTIME.running && hasPendingClaim()) {
+              Logger.log("[System] Pending reward claims still require action. Continuing shutdown.", "warn");
             }
           }
           Logger.shutdown();

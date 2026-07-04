@@ -86,10 +86,6 @@ if (window.clawLock) {
                             <span class="claw-option-label">Desktop notifications</span>
                             <label class="claw-toggle"><input type="checkbox" id="opt-notify"><span class="slider"></span></label>
                         </div>
-                        <div class="claw-option">
-                            <span class="claw-option-label">Random delay (anti-detect)</span>
-                            <label class="claw-toggle"><input type="checkbox" id="opt-delay"><span class="slider"></span></label>
-                        </div>
                     </div>
                     <div class="quest-pick-actions">
                         <button class="quest-pick-btn toggle disabled" id="claw-toggle-all">DESELECT ALL</button>
@@ -138,10 +134,6 @@ if (window.clawLock) {
                             <div class="claw-option">
                                 <span class="claw-option-label">Desktop notifications</span>
                                 <label class="claw-toggle"><input type="checkbox" id="opt-notify"><span class="slider"></span></label>
-                            </div>
-                            <div class="claw-option">
-                                <span class="claw-option-label">Random delay (anti-detect)</span>
-                                <label class="claw-toggle"><input type="checkbox" id="opt-delay"><span class="slider"></span></label>
                             </div>
                         </div>
                         <div class="quest-pick-actions">
@@ -202,13 +194,21 @@ if (window.clawLock) {
                 if (items.length) {
                     $$('input[data-qid]:checked').forEach(cb => selected.add(cb.dataset.qid));
                 }
+
+                if (items.length && selected.size === 0) {
+                    const btn = $('#claw-start-btn');
+                    btn.textContent = 'SELECT QUESTS';
+                    btn.classList.add('disabled');
+                    setTimeout(syncStartBtn, 1200);
+                    Logger.log('[Picker] Select at least one quest before starting.', 'warn');
+                    return;
+                }
                 
                 const options = {
                     autoEnroll: $('#opt-enroll').checked,
                     autoClaim: $('#opt-claim').checked,
                     playSound: $('#opt-sound').checked,
-                    notify: $('#opt-notify').checked,
-                    randomDelay: $('#opt-delay')?.checked ?? false
+                    notify: $('#opt-notify').checked
                 };
 
                 if (options.notify) {
@@ -229,14 +229,23 @@ if (window.clawLock) {
                 body.innerHTML = Logger.getEmptyStateHTML('System', 'Starting up...', 'Preparing selected quests.');
                 body.classList.remove('fade-out');
                 
-                resolve({ selected, options });
+                resolve({ selected: items.length ? selected : null, options });
             });
         });
     }
 
     async function main() {
         Logger.init();
-        if (!loadModules()) return Logger.log('[System] Failed to load Discord modules. Aborting.', 'err');
+        let modulesReady = false;
+        for (let attempt = 1; attempt <= 30 && RUNTIME.running; attempt++) {
+            if (loadModules({ quiet: attempt < 30 })) {
+                modulesReady = true;
+                break;
+            }
+            Logger.log(`[System] Discord modules not ready yet (${attempt}/30). Waiting...`, 'debug');
+            await sleep(1000);
+        }
+        if (!modulesReady) return Logger.log('[System] Failed to load Discord modules. Aborting.', 'err');
 
         const getQuests = () => {
             const q = Mods.QuestStore.quests;
@@ -253,18 +262,14 @@ if (window.clawLock) {
         const { selected, options } = await showQuestPicker(getQuests());
         if (!RUNTIME.running) return;
 
-        if (selected !== null) {
-            RUNTIME.selectedQuests = selected;
-            RUNTIME.autoEnroll = options.autoEnroll;
-            RUNTIME.autoClaim = options.autoClaim;
-            RUNTIME.playSound = options.playSound;
-            RUNTIME.notify = options.notify;
-            RUNTIME.randomDelay = options.randomDelay;
-            Logger.log(`[System] ${selected.size} quest(s) selected. Auto-enroll: ${options.autoEnroll ? 'ON' : 'OFF'}, Auto-claim: ${options.autoClaim ? 'ON' : 'OFF'}`, 'info');
-        } else {
-            Logger.log('[System] No quests selected. Shutting down.', 'info');
-            return Logger.shutdown();
-        }
+        RUNTIME.selectedQuests = selected;
+        RUNTIME.autoEnroll = options.autoEnroll;
+        RUNTIME.autoClaim = options.autoClaim;
+        RUNTIME.playSound = options.playSound;
+        RUNTIME.notify = options.notify;
+
+        const selectedLabel = selected ? `${selected.size} quest(s)` : 'all future eligible quests';
+        Logger.log(`[System] ${selectedLabel} selected. Auto-enroll: ${options.autoEnroll ? 'ON' : 'OFF'}, Auto-claim: ${options.autoClaim ? 'ON' : 'OFF'}`, 'info');
 
         let loopCount = 1;
         let isIdle = false;
@@ -391,12 +396,16 @@ if (window.clawLock) {
             }
         }
 
-        // Wait for any unclaimed rewards before shutting down
-        const unclaimed = [...Logger.tasks.values()].some(t => t.claimable || t.claimState === 'WAITING');
-        if (unclaimed) {
+        // Wait briefly for pending claims during natural shutdown. Manual Stop must not hang here.
+        const hasPendingClaim = () => [...Logger.tasks.values()].some(t => t.claimable || t.claimState === 'WAITING');
+        if (RUNTIME.running && hasPendingClaim()) {
+            const claimWaitUntil = Date.now() + 15000;
             Logger.log('[System] Waiting for pending reward claims before shutdown...', 'info');
-            while ([...Logger.tasks.values()].some(t => t.claimable || t.claimState === 'WAITING')) {
+            while (RUNTIME.running && hasPendingClaim() && Date.now() < claimWaitUntil) {
                 await sleep(3000);
+            }
+            if (RUNTIME.running && hasPendingClaim()) {
+                Logger.log('[System] Pending reward claims still require action. Continuing shutdown.', 'warn');
             }
         }
 

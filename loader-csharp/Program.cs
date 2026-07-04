@@ -1,0 +1,870 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Net.Sockets;
+using System.Net.WebSockets;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Web.Script.Serialization;
+
+namespace ClawInjector
+{
+    internal static class Program
+    {
+        private const string DefaultPayloadUrl = "https://raw.githubusercontent.com/l-limon-l/Claw/main/index.js";
+        private const int DefaultDebugPort = 10222;
+        private static readonly TimeSpan DiscordTargetTimeout = TimeSpan.FromSeconds(90);
+        private static readonly TimeSpan StableTargetDelay = TimeSpan.FromSeconds(8);
+        private static readonly TimeSpan DevToolsTimeout = TimeSpan.FromSeconds(15);
+
+        private static readonly HttpClient Http = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(10)
+        };
+
+        private static readonly JavaScriptSerializer Json = new JavaScriptSerializer
+        {
+            MaxJsonLength = int.MaxValue,
+            RecursionLimit = 128
+        };
+
+        public static int Main(string[] args)
+        {
+            try
+            {
+                ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
+            }
+            catch
+            {
+                // Best effort for older framework defaults.
+            }
+
+            return MainAsync(args).GetAwaiter().GetResult();
+        }
+
+        private static async Task<int> MainAsync(string[] args)
+        {
+            Console.OutputEncoding = Encoding.UTF8;
+            Console.Title = "Claw Auto-Injector";
+
+            try
+            {
+                LoaderOptions options = LoaderOptions.Parse(args);
+                PrintLogo();
+
+                PrintStep("[1/5]", "Resolving Discord...");
+                string discordPath = ResolveDiscordExecutable(options.DiscordExe);
+                PrintSubStep(discordPath);
+
+                PrintStep("[2/5]", "Checking debug port and closing Discord...");
+                AssertDebugPortAvailable(options.DebugPort);
+                StopDiscordProcesses();
+                await WaitForDebugPortFreeAsync(options.DebugPort, TimeSpan.FromSeconds(10));
+
+                PrintStep("[3/5]", "Downloading cloud payload...");
+                string payload = await LoadPayloadAsync(options);
+                if (string.IsNullOrWhiteSpace(payload))
+                {
+                    throw new InvalidOperationException("Payload is empty.");
+                }
+                PrintSubStep(string.Format("{0:N0} characters loaded", payload.Length));
+
+                PrintStep("[4/5]", "Starting Discord and waiting for app page...");
+                StartDiscord(discordPath, options.DebugPort);
+                DevToolsTarget target = await WaitForDiscordTargetAsync(options.DebugPort);
+                PrintSubStep("Ready target: " + target.Url);
+
+                PrintStep("[5/5]", "Injecting Claw payload...");
+                await EvaluateAsync(target.WebSocketDebuggerUrl, payload + "\n//# sourceURL=claw-loader-payload.js", false);
+
+                IDictionary<string, object> verification = await EvaluateAsync(
+                    target.WebSocketDebuggerUrl,
+                    "({ lock: !!window.clawLock, ui: !!document.getElementById('claw-ui'), url: location.href })",
+                    true);
+                PrintSubStep("Verified: " + DescribeVerification(verification));
+
+                PrintSuccess("Injection successful. Discord is running with Claw.");
+                AutoClose();
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                PrintError(ex.Message);
+                Pause(true);
+                return 1;
+            }
+        }
+
+        private static async Task<string> LoadPayloadAsync(LoaderOptions options)
+        {
+            PrintSubStep(options.PayloadUrl);
+            return await Http.GetStringAsync(options.PayloadUrl);
+        }
+
+        private static string ResolveDiscordExecutable(string explicitPath)
+        {
+            if (!string.IsNullOrWhiteSpace(explicitPath))
+            {
+                if (!File.Exists(explicitPath))
+                {
+                    throw new FileNotFoundException("CLAW_DISCORD_EXE points to a missing file.", explicitPath);
+                }
+                return Path.GetFullPath(explicitPath);
+            }
+
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            DiscordChannel[] channels =
+            {
+                new DiscordChannel("Stable", Path.Combine(localAppData, "Discord"), "Discord.exe"),
+                new DiscordChannel("PTB", Path.Combine(localAppData, "DiscordPTB"), "DiscordPTB.exe"),
+                new DiscordChannel("Canary", Path.Combine(localAppData, "DiscordCanary"), "DiscordCanary.exe")
+            };
+
+            foreach (DiscordChannel channel in channels)
+            {
+                if (!Directory.Exists(channel.Root))
+                {
+                    continue;
+                }
+
+                IEnumerable<string> appDirs = Directory.GetDirectories(channel.Root, "app-*")
+                    .OrderByDescending(Path.GetFileName);
+
+                foreach (string appDir in appDirs)
+                {
+                    string candidate = Path.Combine(appDir, channel.ExeName);
+                    if (File.Exists(candidate))
+                    {
+                        return candidate;
+                    }
+                }
+            }
+
+            throw new FileNotFoundException("Could not find Discord Stable/PTB/Canary. Set CLAW_DISCORD_EXE to the full Discord executable path.");
+        }
+
+        private static void StopDiscordProcesses()
+        {
+            string[] names = { "Discord", "DiscordPTB", "DiscordCanary" };
+            List<Process> processes = new List<Process>();
+
+            foreach (string name in names)
+            {
+                try
+                {
+                    processes.AddRange(Process.GetProcessesByName(name));
+                }
+                catch
+                {
+                    // Ignore process enumeration races.
+                }
+            }
+
+            if (processes.Count == 0)
+            {
+                PrintSubStep("No running Discord process found");
+                return;
+            }
+
+            PrintSubStep(string.Format("Closing {0} Discord process(es)", processes.Count));
+            foreach (Process process in processes)
+            {
+                try
+                {
+                    process.Kill();
+                }
+                catch
+                {
+                    // Some child processes may exit while we iterate.
+                }
+                finally
+                {
+                    process.Dispose();
+                }
+            }
+        }
+
+        private static void AssertDebugPortAvailable(int port)
+        {
+            if (CanBindDebugPort(port))
+            {
+                return;
+            }
+
+            int[] listenerPids = GetPortListenerPids(port).Distinct().ToArray();
+            if (listenerPids.Length == 0)
+            {
+                throw new InvalidOperationException(string.Format("Debug port {0} is already in use. Set CLAW_DEBUG_PORT to another port or stop the process using it.", port));
+            }
+
+            List<string> foreignListeners = new List<string>();
+            foreach (int pid in listenerPids)
+            {
+                try
+                {
+                    using (Process process = Process.GetProcessById(pid))
+                    {
+                        if (!IsDiscordProcess(process))
+                        {
+                            foreignListeners.Add(string.Format("{0} ({1})", process.ProcessName, pid));
+                        }
+                    }
+                }
+                catch
+                {
+                    foreignListeners.Add("pid " + pid);
+                }
+            }
+
+            if (foreignListeners.Count > 0)
+            {
+                throw new InvalidOperationException(string.Format("Debug port {0} is already in use by non-Discord process(es): {1}. Set CLAW_DEBUG_PORT to another port or stop that process.", port, string.Join(", ", foreignListeners)));
+            }
+
+            PrintSubStep(string.Format("Debug port {0} is occupied by an existing Discord session; it will be restarted", port));
+        }
+
+        private static async Task WaitForDebugPortFreeAsync(int port, TimeSpan timeout)
+        {
+            DateTime deadline = DateTime.UtcNow + timeout;
+            while (DateTime.UtcNow < deadline)
+            {
+                if (CanBindDebugPort(port))
+                {
+                    return;
+                }
+
+                await Task.Delay(300);
+            }
+
+            throw new InvalidOperationException(string.Format("Debug port {0} is still busy after closing Discord.", port));
+        }
+
+        private static bool CanBindDebugPort(int port)
+        {
+            try
+            {
+                TcpListener listener = new TcpListener(IPAddress.Loopback, port);
+                listener.Start();
+                listener.Stop();
+                return true;
+            }
+            catch (SocketException)
+            {
+                return false;
+            }
+        }
+
+        private static IReadOnlyList<int> GetPortListenerPids(int port)
+        {
+            List<int> pids = new List<int>();
+            try
+            {
+                ProcessStartInfo startInfo = new ProcessStartInfo
+                {
+                    FileName = "netstat",
+                    Arguments = "-ano -p tcp",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+
+                using (Process process = Process.Start(startInfo))
+                {
+                    if (process == null)
+                    {
+                        return pids;
+                    }
+
+                    string output = process.StandardOutput.ReadToEnd();
+                    if (!process.WaitForExit(3000))
+                    {
+                        try { process.Kill(); } catch { }
+                    }
+
+                    string[] lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                    foreach (string line in lines)
+                    {
+                        string[] parts = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                        if (parts.Length < 5 || !parts[0].Equals("TCP", StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
+
+                        if (!parts[3].Equals("LISTENING", StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
+
+                        if (!parts[1].EndsWith(":" + port, StringComparison.Ordinal))
+                        {
+                            continue;
+                        }
+
+                        int pid;
+                        if (int.TryParse(parts[parts.Length - 1], out pid))
+                        {
+                            pids.Add(pid);
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Best effort: the caller still reports that the port is busy.
+            }
+
+            return pids;
+        }
+
+        private static bool IsDiscordProcess(Process process)
+        {
+            string[] names = { "Discord", "DiscordPTB", "DiscordCanary" };
+            if (names.Contains(process.ProcessName, StringComparer.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            try
+            {
+                string path = process.MainModule == null ? "" : process.MainModule.FileName;
+                return path.IndexOf("\\Discord", StringComparison.OrdinalIgnoreCase) >= 0
+                    && Path.GetFileName(path).StartsWith("Discord", StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static void StartDiscord(string discordPath, int debugPort)
+        {
+            ProcessStartInfo startInfo = new ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                Arguments = string.Format(
+                    "/d /c start \"\" \"{0}\" --remote-debugging-port={1} --remote-allow-origins=*",
+                    discordPath,
+                    debugPort),
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+
+            using (Process process = Process.Start(startInfo))
+            {
+                if (process == null)
+                {
+                    throw new InvalidOperationException("Failed to start Discord.");
+                }
+
+                if (!process.WaitForExit(5000))
+                {
+                    try { process.Kill(); } catch { }
+                    throw new TimeoutException("Discord launcher did not return in time.");
+                }
+
+                if (process.ExitCode != 0)
+                {
+                    string error = process.StandardError.ReadToEnd();
+                    throw new InvalidOperationException("Discord launcher failed: " + error);
+                }
+            }
+
+            PrintSubStep("Remote debugging port: " + debugPort);
+        }
+
+        private static async Task<DevToolsTarget> WaitForDiscordTargetAsync(int debugPort)
+        {
+            DevToolsTarget stableTarget = null;
+            string stableUrl = null;
+            DateTime? stableSince = null;
+            DateTime deadline = DateTime.UtcNow + DiscordTargetTimeout;
+            DateTime lastProgress = DateTime.MinValue;
+
+            while (DateTime.UtcNow < deadline)
+            {
+                try
+                {
+                    IReadOnlyList<DevToolsTarget> targets = await GetDevToolsTargetsAsync(debugPort);
+                    DevToolsTarget[] candidates = targets
+                        .Where(t => !string.IsNullOrWhiteSpace(t.WebSocketDebuggerUrl))
+                        .Where(t => IsDiscordAppUrl(t.Url))
+                        .ToArray();
+
+                    DevToolsTarget candidate = candidates.FirstOrDefault(t => t.Url.StartsWith("https://discord.com/channels", StringComparison.OrdinalIgnoreCase))
+                        ?? candidates.FirstOrDefault();
+
+                    if (candidate != null)
+                    {
+                        string candidateUrl = candidate.Url.Trim();
+                        if (!string.Equals(stableUrl, candidateUrl, StringComparison.Ordinal))
+                        {
+                            stableTarget = candidate;
+                            stableUrl = candidateUrl;
+                            stableSince = DateTime.UtcNow;
+                            PrintSubStep("Observed target: " + candidateUrl);
+                            lastProgress = DateTime.UtcNow;
+                        }
+                        else
+                        {
+                            stableTarget = candidate;
+                            if ((DateTime.UtcNow - lastProgress).TotalSeconds >= 5)
+                            {
+                                PrintSubStep("Still waiting on: " + candidateUrl);
+                                lastProgress = DateTime.UtcNow;
+                            }
+                        }
+
+                        if (stableTarget != null && stableSince.HasValue && DateTime.UtcNow - stableSince.Value >= StableTargetDelay)
+                        {
+                            return stableTarget;
+                        }
+                    }
+                    else if ((DateTime.UtcNow - lastProgress).TotalSeconds >= 5)
+                    {
+                        PrintSubStep("Waiting for discord.com app target...");
+                        lastProgress = DateTime.UtcNow;
+                    }
+                }
+                catch
+                {
+                    // Discord may not have opened the DevTools endpoint yet.
+                }
+
+                await Task.Delay(1000);
+            }
+
+            throw new TimeoutException(string.Format("Discord did not finish loading a ready app page on port {0} within {1:N0} seconds.", debugPort, DiscordTargetTimeout.TotalSeconds));
+        }
+
+        private static bool IsDiscordAppUrl(string url)
+        {
+            return !string.IsNullOrWhiteSpace(url)
+                && (url.StartsWith("https://discord.com/app", StringComparison.OrdinalIgnoreCase)
+                    || url.StartsWith("https://discord.com/channels", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static async Task<IReadOnlyList<DevToolsTarget>> GetDevToolsTargetsAsync(int port)
+        {
+            string json = await Http.GetStringAsync(string.Format("http://127.0.0.1:{0}/json", port));
+            object parsed = Json.DeserializeObject(json);
+            object[] array = parsed as object[];
+
+            if (array == null)
+            {
+                IDictionary<string, object> wrapper = parsed as IDictionary<string, object>;
+                object value;
+                if (wrapper != null && wrapper.TryGetValue("value", out value))
+                {
+                    array = value as object[];
+                }
+            }
+
+            List<DevToolsTarget> targets = new List<DevToolsTarget>();
+            if (array == null)
+            {
+                return targets;
+            }
+
+            foreach (object item in array)
+            {
+                IDictionary<string, object> dict = item as IDictionary<string, object>;
+                if (dict == null)
+                {
+                    continue;
+                }
+
+                targets.Add(new DevToolsTarget
+                {
+                    Type = GetString(dict, "type"),
+                    Url = GetString(dict, "url"),
+                    Title = GetString(dict, "title"),
+                    WebSocketDebuggerUrl = GetString(dict, "webSocketDebuggerUrl")
+                });
+            }
+
+            return targets;
+        }
+
+        private static async Task<IDictionary<string, object>> EvaluateAsync(string webSocketUrl, string expression, bool returnByValue)
+        {
+            using (ClientWebSocket ws = new ClientWebSocket())
+            using (CancellationTokenSource cts = new CancellationTokenSource(DevToolsTimeout))
+            {
+                await ws.ConnectAsync(new Uri(webSocketUrl), cts.Token);
+
+                Dictionary<string, object> request = new Dictionary<string, object>
+                {
+                    { "id", 1 },
+                    { "method", "Runtime.evaluate" },
+                    { "params", new Dictionary<string, object>
+                        {
+                            { "expression", expression },
+                            { "awaitPromise", false },
+                            { "returnByValue", returnByValue }
+                        }
+                    }
+                };
+
+                byte[] bytes = Encoding.UTF8.GetBytes(Json.Serialize(request));
+                await ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, cts.Token);
+
+                while (true)
+                {
+                    IDictionary<string, object> root = await ReceiveJsonAsync(ws, cts.Token);
+
+                    int id;
+                    if (!TryGetInt(root, "id", out id) || id != 1)
+                    {
+                        continue;
+                    }
+
+                    IDictionary<string, object> error = GetDictionary(root, "error");
+                    if (error != null)
+                    {
+                        string message = GetString(error, "message");
+                        throw new InvalidOperationException("DevTools error: " + (string.IsNullOrWhiteSpace(message) ? Json.Serialize(error) : message));
+                    }
+
+                    IDictionary<string, object> result = GetDictionary(root, "result");
+                    if (result != null && GetDictionary(result, "exceptionDetails") != null)
+                    {
+                        throw new InvalidOperationException(ExtractExceptionMessage(GetDictionary(result, "exceptionDetails")));
+                    }
+
+                    return root;
+                }
+            }
+        }
+
+        private static async Task<IDictionary<string, object>> ReceiveJsonAsync(ClientWebSocket ws, CancellationToken cancellationToken)
+        {
+            byte[] buffer = new byte[64 * 1024];
+            using (MemoryStream stream = new MemoryStream())
+            {
+                while (true)
+                {
+                    WebSocketReceiveResult result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
+                    if (result.MessageType == WebSocketMessageType.Close)
+                    {
+                        throw new WebSocketException("DevTools WebSocket closed before returning a Runtime.evaluate response.");
+                    }
+
+                    stream.Write(buffer, 0, result.Count);
+                    if (result.EndOfMessage)
+                    {
+                        break;
+                    }
+                }
+
+                string json = Encoding.UTF8.GetString(stream.ToArray());
+                IDictionary<string, object> dict = Json.DeserializeObject(json) as IDictionary<string, object>;
+                if (dict == null)
+                {
+                    throw new InvalidOperationException("DevTools returned a non-object JSON response.");
+                }
+
+                return dict;
+            }
+        }
+
+        private static string ExtractExceptionMessage(IDictionary<string, object> details)
+        {
+            IDictionary<string, object> exception = GetDictionary(details, "exception");
+            string description = exception == null ? "" : GetString(exception, "description");
+            if (!string.IsNullOrWhiteSpace(description))
+            {
+                return description;
+            }
+
+            string text = GetString(details, "text");
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                return text;
+            }
+
+            return "Runtime.evaluate failed with exceptionDetails.";
+        }
+
+        private static string DescribeVerification(IDictionary<string, object> document)
+        {
+            try
+            {
+                IDictionary<string, object> outerResult = GetDictionary(document, "result");
+                IDictionary<string, object> innerResult = outerResult == null ? null : GetDictionary(outerResult, "result");
+                IDictionary<string, object> value = innerResult == null ? null : GetDictionary(innerResult, "value");
+
+                if (value == null)
+                {
+                    return "verification response received";
+                }
+
+                bool locked = GetBool(value, "lock");
+                bool ui = GetBool(value, "ui");
+                string url = GetString(value, "url");
+                return string.Format("lock={0}, ui={1}, url={2}", locked, ui, url);
+            }
+            catch
+            {
+                return "verification response received";
+            }
+        }
+
+        private static IDictionary<string, object> GetDictionary(IDictionary<string, object> dict, string key)
+        {
+            if (dict == null)
+            {
+                return null;
+            }
+
+            object value;
+            return dict.TryGetValue(key, out value) ? value as IDictionary<string, object> : null;
+        }
+
+        private static string GetString(IDictionary<string, object> dict, string key)
+        {
+            if (dict == null)
+            {
+                return "";
+            }
+
+            object value;
+            return dict.TryGetValue(key, out value) && value != null ? Convert.ToString(value) : "";
+        }
+
+        private static bool GetBool(IDictionary<string, object> dict, string key)
+        {
+            if (dict == null)
+            {
+                return false;
+            }
+
+            object value;
+            if (!dict.TryGetValue(key, out value) || value == null)
+            {
+                return false;
+            }
+
+            if (value is bool)
+            {
+                return (bool)value;
+            }
+
+            bool parsed;
+            return bool.TryParse(Convert.ToString(value), out parsed) && parsed;
+        }
+
+        private static bool TryGetInt(IDictionary<string, object> dict, string key, out int value)
+        {
+            value = 0;
+            if (dict == null)
+            {
+                return false;
+            }
+
+            object raw;
+            if (!dict.TryGetValue(key, out raw) || raw == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                value = Convert.ToInt32(raw);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static void PrintLogo()
+        {
+            try
+            {
+                Console.Clear();
+                Console.WindowWidth = Math.Min(80, Math.Max(Console.WindowWidth, 60));
+                Console.BufferWidth = Math.Min(120, Math.Max(Console.BufferWidth, 80));
+            }
+            catch
+            {
+                // Console sizing is best effort.
+            }
+
+            Console.ForegroundColor = ConsoleColor.Magenta;
+            Console.WriteLine("   ______   __       ___   _       __");
+            Console.WriteLine("  / ____/  / /      /   | | |     / /");
+            Console.WriteLine(" / /      / /      / /| | | | /| / / ");
+            Console.WriteLine("/ /___   / /___   / ___ | | |/ |/ /  ");
+            Console.WriteLine("\\____/  /_____/  /_/  |_| |__/|__/   ");
+            Console.WriteLine();
+            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.WriteLine("============================================================");
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine("             Cloud Auto-Injector");
+            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.WriteLine("============================================================");
+            Console.ResetColor();
+            Console.WriteLine();
+        }
+
+        private static void PrintStep(string step, string message)
+        {
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.Write(step + " ");
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine(message);
+            Console.ResetColor();
+        }
+
+        private static void PrintSubStep(string message)
+        {
+            // Keep the loader UI clean: only top-level steps are printed.
+        }
+
+        private static void PrintError(string message)
+        {
+            Console.WriteLine();
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.Write("[ERROR] ");
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine(message);
+            Console.ResetColor();
+            Console.WriteLine();
+        }
+
+        private static void PrintSuccess(string message)
+        {
+            Console.WriteLine();
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.Write("[SUCCESS] ");
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine(message);
+            Console.ResetColor();
+        }
+
+        private static void AutoClose()
+        {
+            Pause(false);
+        }
+
+        private static void Pause(bool forceWait)
+        {
+            try
+            {
+                if (forceWait && !Console.IsInputRedirected)
+                {
+                    Console.WriteLine("Press any key to exit...");
+                    Console.ReadKey(true);
+                }
+                else
+                {
+                    Thread.Sleep(5000);
+                }
+            }
+            catch
+            {
+                Thread.Sleep(5000);
+            }
+        }
+
+        private sealed class DiscordChannel
+        {
+            public DiscordChannel(string name, string root, string exeName)
+            {
+                Name = name;
+                Root = root;
+                ExeName = exeName;
+            }
+
+            public string Name { get; private set; }
+            public string Root { get; private set; }
+            public string ExeName { get; private set; }
+        }
+
+        private sealed class DevToolsTarget
+        {
+            public string Type { get; set; }
+            public string Url { get; set; }
+            public string Title { get; set; }
+            public string WebSocketDebuggerUrl { get; set; }
+        }
+
+        private sealed class LoaderOptions
+        {
+            public int DebugPort { get; private set; }
+            public string PayloadUrl { get; private set; }
+            public string DiscordExe { get; private set; }
+
+            public static LoaderOptions Parse(string[] args)
+            {
+                int debugPort = ParseInt(Environment.GetEnvironmentVariable("CLAW_DEBUG_PORT")) ?? DefaultDebugPort;
+                string payloadUrl = Environment.GetEnvironmentVariable("CLAW_PAYLOAD_URL") ?? DefaultPayloadUrl;
+                string discordExe = Environment.GetEnvironmentVariable("CLAW_DISCORD_EXE");
+
+                for (int i = 0; i < args.Length; i++)
+                {
+                    string arg = args[i];
+                    if (i == 0 && arg.Equals("cloud", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    if (arg.Equals("local", StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new ArgumentException("Local payload mode was removed. Claw.exe is a cloud loader.");
+                    }
+
+                    switch (arg)
+                    {
+                        case "--mode":
+                            if (i + 1 >= args.Length) throw new ArgumentException("Missing value for --mode.");
+                            string mode = args[++i];
+                            if (!mode.Equals("cloud", StringComparison.OrdinalIgnoreCase))
+                            {
+                                throw new ArgumentException("Only cloud mode is supported.");
+                            }
+                            break;
+                        case "--port":
+                            if (i + 1 >= args.Length) throw new ArgumentException("Missing value for --port.");
+                            int? parsedPort = ParseInt(args[++i]);
+                            if (!parsedPort.HasValue) throw new ArgumentException("Port must be a number.");
+                            debugPort = parsedPort.Value;
+                            break;
+                        case "--payload-url":
+                            if (i + 1 >= args.Length) throw new ArgumentException("Missing value for --payload-url.");
+                            payloadUrl = args[++i];
+                            break;
+                        case "--discord-exe":
+                            if (i + 1 >= args.Length) throw new ArgumentException("Missing value for --discord-exe.");
+                            discordExe = args[++i];
+                            break;
+                    }
+                }
+
+                return new LoaderOptions
+                {
+                    DebugPort = debugPort,
+                    PayloadUrl = payloadUrl,
+                    DiscordExe = discordExe
+                };
+            }
+
+            private static int? ParseInt(string value)
+            {
+                int parsed;
+                return int.TryParse(value, out parsed) ? parsed : (int?)null;
+            }
+        }
+
+    }
+}

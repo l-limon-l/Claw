@@ -85,10 +85,11 @@ export const Patcher = {
     }
 };
 
-export function loadModules() {
+export function loadModules(options = {}) {
+    const quiet = options.quiet === true;
     try {
         if (typeof window.Vencord !== 'undefined' && window.Vencord.Webpack) {
-            Logger.log('[System] Vencord detected. Using Vencord Webpack API...', 'info');
+            if (!quiet) Logger.log('[System] Vencord detected. Using Vencord Webpack API...', 'info');
             const W = window.Vencord.Webpack;
 
             let routerModule;
@@ -120,11 +121,11 @@ export function loadModules() {
 
             if (missing.length === 0) {
                 const optional = ['StreamStore', 'ChanStore', 'GuildChanStore', 'Router'];
-                optional.forEach(k => { if (!Mods[k]) Logger.log(`[System] Optional module '${k}' not found. Features may be limited.`, 'warn'); });
+                optional.forEach(k => { if (!quiet && !Mods[k]) Logger.log(`[System] Optional module '${k}' not found. Features may be limited.`, 'warn'); });
                 Patcher.init(Mods.RunStore);
                 return true;
             }
-            Logger.log(`[System] Vencord extraction missed: ${missing.join(', ')}. Falling back to native...`, 'warn');
+            if (!quiet) Logger.log(`[System] Vencord extraction missed: ${missing.join(', ')}. Falling back to native...`, 'warn');
         }
 
         if (typeof webpackChunkdiscord_app === 'undefined') throw new Error("Webpack chunk not found");
@@ -221,12 +222,12 @@ export function loadModules() {
         if (missing.length > 0) throw new Error(`Core modules not found: ${missing.join(', ')}`);
 
         const optional = ['StreamStore', 'ChanStore', 'GuildChanStore', 'Router'];
-        optional.forEach(k => { if (!Mods[k]) Logger.log(`[System] Optional module '${k}' not found. Features may be limited.`, 'warn'); });
+        optional.forEach(k => { if (!quiet && !Mods[k]) Logger.log(`[System] Optional module '${k}' not found. Features may be limited.`, 'warn'); });
 
         Patcher.init(Mods.RunStore);
         return true;
     } catch (e) {
-        Logger.log(`[System] Module loading error: ${e.message ?? e}`, 'err');
+        if (!quiet) Logger.log(`[System] Module loading error: ${e.message ?? e}`, 'err');
         return false;
     }
 }

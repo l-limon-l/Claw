@@ -68,11 +68,15 @@ export const Tasks = {
     detectType(cfg, applicationId) {
         const taskKeys = Object.keys(cfg.tasks);
         const typeMap = [
-            { key: "PLAY", type: "GAME" },
-            { key: "STREAM", type: "STREAM" },
-            { key: "VIDEO", type: "WATCH_VIDEO" },
             { key: "ACHIEVEMENT_IN_ACTIVITY", type: "ACHIEVEMENT" },
-            { key: "ACTIVITY", type: "ACTIVITY" }
+            { key: "PLAY_ACTIVITY", type: "ACTIVITY" },
+            { key: "WATCH_VIDEO", type: "WATCH_VIDEO" },
+            { key: "STREAM_ON_DESKTOP", type: "STREAM" },
+            { key: "PLAY_ON_DESKTOP", type: "GAME" },
+            { key: "ACTIVITY", type: "ACTIVITY" },
+            { key: "VIDEO", type: "WATCH_VIDEO" },
+            { key: "STREAM", type: "STREAM" },
+            { key: "PLAY", type: "GAME" }
         ];
 
         for (const { key, type } of typeMap) {
@@ -81,7 +85,8 @@ export const Tasks = {
         }
 
         if (applicationId) {
-            return { type: "GAME", keyName: "PLAY_ON_DESKTOP", target: cfg.tasks[taskKeys[0]]?.target ?? 0 };
+            const keyName = taskKeys[0];
+            return { type: "GAME", keyName, target: cfg.tasks[keyName]?.target ?? 0 };
         }
 
         return null;
@@ -352,8 +357,8 @@ export const Tasks = {
         }
     },
 
-    GAME(q, t, s) { return Tasks.generic(q, t, "GAME", "PLAY_ON_DESKTOP", s); },
-    STREAM(q, t, s) { return Tasks.generic(q, t, "STREAM", "STREAM_ON_DESKTOP", s); },
+    GAME(q, t, s) { return Tasks.generic(q, t, "GAME", t.keyName, s); },
+    STREAM(q, t, s) { return Tasks.generic(q, t, "STREAM", t.keyName, s); },
 
     async generic(q, t, type, key, s) {
         if (!RUNTIME.running) return;
@@ -536,7 +541,7 @@ export const Tasks = {
         Sound.play('tick');
 
         try {
-            if (typeof Notification !== 'undefined') {
+            if (RUNTIME.notify && typeof Notification !== 'undefined') {
                 if (Notification.permission === 'default') { try { await Notification.requestPermission(); } catch (_) { } }
                 if (Notification.permission === 'granted') {
                     new Notification("Claw: Quest Completed", { body: t.name, icon: "https://cdn.discordapp.com/emojis/1120042457007792168.webp", tag: `claw-${q.id}` });
