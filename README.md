@@ -51,7 +51,7 @@ loader-csharp\bin\Release\net48\Claw.exe
 The release loader targets `.NET Framework 4.8`, embeds the recovered original icon, and downloads the payload from:
 
 ```text
-https://raw.githubusercontent.com/l-limon-l/Claw/main/index.js
+https://github.com/l-limon-l/Claw/releases/download/Main/index.js
 ```
 
 Optional cloud loader variables:
@@ -110,7 +110,7 @@ loader-csharp\bin\Release\net48\Claw.exe
 Release loader собирается под `.NET Framework 4.8`, вшивает восстановленную оригинальную иконку и скачивает payload отсюда:
 
 ```text
-https://raw.githubusercontent.com/l-limon-l/Claw/main/index.js
+https://github.com/l-limon-l/Claw/releases/download/Main/index.js
 ```
 
 Дополнительные переменные cloud loader:
