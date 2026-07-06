@@ -526,23 +526,29 @@ namespace ClawInjector
             }
         }
 
-        private const uint DETACHED_PROCESS = 0x00000008;
+        private const uint CREATE_NEW_CONSOLE = 0x00000010;
+        private const int STARTF_USESHOWWINDOW = 0x00000001;
+        private const short SW_HIDE = 0;
 
         private static void StartDiscord(string discordPath, int debugPort)
         {
-            // Launch Discord fully detached from the loader's console via CreateProcess
-            // with DETACHED_PROCESS and bInheritHandles=false. UseShellExecute=true was
-            // not enough: Electron/Chromium still wrote its remote-debugging logs into our
-            // window and closing the loader still killed Discord. With DETACHED_PROCESS the
-            // child gets NO console and does NOT inherit our stdout/stderr, so:
-            //   1. Discord's logs never appear in the loader window, and
-            //   2. closing the loader window can't send CTRL_CLOSE to Discord.
+            // Give Discord its OWN hidden console via CREATE_NEW_CONSOLE + SW_HIDE.
+            // This is what actually stops the log spam. Electron/Chromium, when it has no
+            // console of its own, calls AttachConsole(ATTACH_PARENT_PROCESS) and hijacks the
+            // launcher's console to print into. That is why UseShellExecute=true and even
+            // DETACHED_PROCESS did NOT help: the parent-console attach happens regardless of
+            // handle inheritance. Handing Discord a brand-new (hidden) console gives it
+            // somewhere else to log, so:
+            //   1. Discord's logs never reach the loader window, and
+            //   2. Discord no longer shares our console, so closing the loader can't kill it.
             string commandLine = string.Format(
                 "\"{0}\" --remote-debugging-port={1} --remote-allow-origins=*",
                 discordPath, debugPort);
 
             STARTUPINFO startupInfo = new STARTUPINFO();
             startupInfo.cb = Marshal.SizeOf(typeof(STARTUPINFO));
+            startupInfo.dwFlags = STARTF_USESHOWWINDOW;
+            startupInfo.wShowWindow = SW_HIDE;   // keep the new console hidden
 
             PROCESS_INFORMATION processInfo;
             bool started = CreateProcess(
@@ -550,8 +556,8 @@ namespace ClawInjector
                 commandLine,
                 IntPtr.Zero,
                 IntPtr.Zero,
-                false,              // do not inherit our handles (no log leak)
-                DETACHED_PROCESS,   // no console (no CTRL_CLOSE propagation)
+                false,                // don't inherit our handles
+                CREATE_NEW_CONSOLE,   // Discord gets its own console (hidden) to log into
                 IntPtr.Zero,
                 Path.GetDirectoryName(discordPath),
                 ref startupInfo,
