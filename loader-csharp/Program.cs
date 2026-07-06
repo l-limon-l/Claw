@@ -154,8 +154,6 @@ namespace ClawInjector
                 return true;
             }
 
-            PrintStep("[i]", "Checking for the latest version...");
-
             VersionManifest manifest;
             try
             {
