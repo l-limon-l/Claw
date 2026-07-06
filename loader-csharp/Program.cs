@@ -8,6 +8,7 @@ using System.Net.Http;
 using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,6 +19,9 @@ namespace ClawInjector
     internal static class Program
     {
         private const string PayloadResourceName = "Claw.payload.js";
+        private const string LoaderVersion = "4.7.1";
+        private const string VersionManifestUrl = "https://raw.githubusercontent.com/l-limon-l/Claw/main/latest.json";
+        private const string DefaultReleaseUrl = "https://github.com/l-limon-l/Claw/releases/tag/Main";
         private const int DefaultDebugPort = 10222;
         private static readonly TimeSpan DiscordTargetTimeout = TimeSpan.FromSeconds(90);
         private static readonly TimeSpan StableTargetDelay = TimeSpan.FromSeconds(8);
@@ -57,6 +61,11 @@ namespace ClawInjector
             {
                 LoaderOptions options = LoaderOptions.Parse(args);
                 PrintLogo();
+
+                if (!await EnsureUpToDateAsync())
+                {
+                    return 2;
+                }
 
                 PrintStep("[1/5]", "Resolving Discord...");
                 string discordPath = ResolveDiscordExecutable(options.DiscordExe);
@@ -103,10 +112,22 @@ namespace ClawInjector
 
         private static string LoadEmbeddedPayload()
         {
+            byte[] bytes = ReadEmbeddedPayloadBytes();
+
+            // Strip a UTF-8 BOM if present so the injected source stays clean.
+            if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
+            {
+                return new UTF8Encoding(false).GetString(bytes, 3, bytes.Length - 3);
+            }
+
+            return new UTF8Encoding(false).GetString(bytes);
+        }
+
+        private static byte[] ReadEmbeddedPayloadBytes()
+        {
             // The payload is compiled into the executable as an embedded resource
-            // (see <EmbeddedResource> in ClawInjector.csproj). Reading it from inside
-            // the binary avoids the runtime "download code from the internet and run it"
-            // behavior, which is both a tamper risk and the main heuristic AV trigger.
+            // (see <EmbeddedResource> in ClawInjector.csproj), so there is no runtime
+            // download. The same bytes are hashed for the startup version check.
             Assembly assembly = Assembly.GetExecutingAssembly();
             using (Stream stream = assembly.GetManifestResourceStream(PayloadResourceName))
             {
@@ -117,11 +138,142 @@ namespace ClawInjector
                         "Rebuild with a fresh index.js (run: npm run build, then dotnet build).");
                 }
 
-                using (StreamReader reader = new StreamReader(stream, Encoding.UTF8))
+                using (MemoryStream buffer = new MemoryStream())
                 {
-                    return reader.ReadToEnd();
+                    stream.CopyTo(buffer);
+                    return buffer.ToArray();
                 }
             }
+        }
+
+        private static async Task<bool> EnsureUpToDateAsync()
+        {
+            if (IsTruthy(Environment.GetEnvironmentVariable("CLAW_SKIP_VERSION_CHECK")))
+            {
+                return true;
+            }
+
+            PrintStep("[i]", "Checking for the latest version...");
+
+            VersionManifest manifest;
+            try
+            {
+                string json = await Http.GetStringAsync(VersionManifestUrl);
+                manifest = VersionManifest.Parse(Json.DeserializeObject(json) as IDictionary<string, object>);
+            }
+            catch
+            {
+                // Offline or manifest unreachable: don't block usage.
+                PrintWarning("Could not check for updates (offline?). Continuing with the current build.");
+                return true;
+            }
+
+            if (manifest == null)
+            {
+                PrintWarning("Update manifest was invalid. Continuing with the current build.");
+                return true;
+            }
+
+            string payloadHash;
+            string loaderHash;
+            try
+            {
+                payloadHash = ComputeSha256Hex(ReadEmbeddedPayloadBytes());
+                loaderHash = ComputeSelfSha256Hex();
+            }
+            catch
+            {
+                // If we can't hash our own files, don't block the user.
+                PrintWarning("Could not verify the local build. Continuing.");
+                return true;
+            }
+
+            if (HashesMatch(manifest.PayloadSha256, payloadHash) && HashesMatch(manifest.LoaderSha256, loaderHash))
+            {
+                PrintSubStep("Up to date (v" + LoaderVersion + ")");
+                return true;
+            }
+
+            string releaseUrl = string.IsNullOrWhiteSpace(manifest.ReleaseUrl) ? DefaultReleaseUrl : manifest.ReleaseUrl;
+            PromptUpdate(manifest.Version, releaseUrl);
+            return false;
+        }
+
+        private static bool HashesMatch(string expected, string actual)
+        {
+            // Nothing published to compare against => treat as a match (don't block).
+            if (string.IsNullOrWhiteSpace(expected))
+            {
+                return true;
+            }
+
+            return string.Equals(expected.Trim(), actual, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string ComputeSha256Hex(byte[] data)
+        {
+            using (SHA256 sha = SHA256.Create())
+            {
+                byte[] hash = sha.ComputeHash(data);
+                StringBuilder sb = new StringBuilder(hash.Length * 2);
+                foreach (byte b in hash)
+                {
+                    sb.Append(b.ToString("x2"));
+                }
+                return sb.ToString();
+            }
+        }
+
+        private static string ComputeSelfSha256Hex()
+        {
+            string exePath = Process.GetCurrentProcess().MainModule.FileName;
+            return ComputeSha256Hex(File.ReadAllBytes(exePath));
+        }
+
+        private static void PromptUpdate(string latestVersion, string releaseUrl)
+        {
+            Console.WriteLine();
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.Write("[UPDATE] ");
+            Console.ForegroundColor = ConsoleColor.White;
+            string versionSuffix = string.IsNullOrWhiteSpace(latestVersion) ? "" : (" (" + latestVersion + ")");
+            Console.WriteLine("A new version" + versionSuffix + " is available. This build (v" + LoaderVersion + ") is outdated.");
+            Console.WriteLine("Please download the latest loader to keep quests working.");
+            Console.ResetColor();
+            Console.WriteLine();
+
+            if (!Console.IsInputRedirected)
+            {
+                Console.WriteLine("Press Enter to open the download page...");
+                try { Console.ReadLine(); } catch { }
+            }
+
+            OpenUrl(releaseUrl);
+        }
+
+        private static void OpenUrl(string url)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+            }
+            catch
+            {
+                Console.WriteLine("Open this link manually: " + url);
+            }
+        }
+
+        private static bool IsTruthy(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            value = value.Trim();
+            return value == "1"
+                || value.Equals("true", StringComparison.OrdinalIgnoreCase)
+                || value.Equals("yes", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string ResolveDiscordExecutable(string explicitPath)
@@ -764,6 +916,15 @@ namespace ClawInjector
             Console.WriteLine();
         }
 
+        private static void PrintWarning(string message)
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.Write("[WARN] ");
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine(message);
+            Console.ResetColor();
+        }
+
         private static void PrintSuccess(string message)
         {
             Console.WriteLine();
@@ -819,6 +980,30 @@ namespace ClawInjector
             public string Url { get; set; }
             public string Title { get; set; }
             public string WebSocketDebuggerUrl { get; set; }
+        }
+
+        private sealed class VersionManifest
+        {
+            public string Version { get; set; }
+            public string PayloadSha256 { get; set; }
+            public string LoaderSha256 { get; set; }
+            public string ReleaseUrl { get; set; }
+
+            public static VersionManifest Parse(IDictionary<string, object> dict)
+            {
+                if (dict == null)
+                {
+                    return null;
+                }
+
+                return new VersionManifest
+                {
+                    Version = GetString(dict, "version"),
+                    PayloadSha256 = GetString(dict, "payloadSha256"),
+                    LoaderSha256 = GetString(dict, "loaderSha256"),
+                    ReleaseUrl = GetString(dict, "releaseUrl")
+                };
+            }
         }
 
         private sealed class LoaderOptions
