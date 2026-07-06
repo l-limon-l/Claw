@@ -23,6 +23,7 @@ namespace ClawInjector
         private const string LoaderVersion = "4.7.1";
         private const string VersionManifestUrl = "https://raw.githubusercontent.com/l-limon-l/Claw/main/latest.json";
         private const string DefaultReleaseUrl = "https://github.com/l-limon-l/Claw/releases/tag/Main";
+        private const string DiscordSpawnWorkerArg = "--spawn-discord";
         private const int DefaultDebugPort = 10222;
         private static readonly TimeSpan DiscordTargetTimeout = TimeSpan.FromSeconds(90);
         private static readonly TimeSpan StableTargetDelay = TimeSpan.FromSeconds(8);
@@ -41,6 +42,11 @@ namespace ClawInjector
 
         public static int Main(string[] args)
         {
+            if (IsDiscordSpawnWorker(args))
+            {
+                return RunDiscordSpawnWorker(args);
+            }
+
             try
             {
                 ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
@@ -524,29 +530,82 @@ namespace ClawInjector
             }
         }
 
-        private const uint CREATE_NEW_CONSOLE = 0x00000010;
+        private const uint DETACHED_PROCESS = 0x00000008;
+        private const uint CREATE_NEW_PROCESS_GROUP = 0x00000200;
+        private const uint CREATE_NO_WINDOW = 0x08000000;
         private const int STARTF_USESHOWWINDOW = 0x00000001;
         private const short SW_HIDE = 0;
 
         private static void StartDiscord(string discordPath, int debugPort)
         {
-            // Give Discord its OWN hidden console via CREATE_NEW_CONSOLE + SW_HIDE.
-            // This is what actually stops the log spam. Electron/Chromium, when it has no
-            // console of its own, calls AttachConsole(ATTACH_PARENT_PROCESS) and hijacks the
-            // launcher's console to print into. That is why UseShellExecute=true and even
-            // DETACHED_PROCESS did NOT help: the parent-console attach happens regardless of
-            // handle inheritance. Handing Discord a brand-new (hidden) console gives it
-            // somewhere else to log, so:
-            //   1. Discord's logs never reach the loader window, and
-            //   2. Discord no longer shares our console, so closing the loader can't kill it.
-            string commandLine = string.Format(
-                "\"{0}\" --remote-debugging-port={1} --remote-allow-origins=*",
-                discordPath, debugPort);
+            string loaderPath = Process.GetCurrentProcess().MainModule.FileName;
+            string commandLine = QuoteArgument(loaderPath)
+                + " " + DiscordSpawnWorkerArg
+                + " " + QuoteArgument(discordPath)
+                + " " + debugPort;
 
+            StartDetachedProcess(
+                commandLine,
+                Path.GetDirectoryName(loaderPath),
+                "Failed to start Discord launcher");
+
+            PrintSubStep("Remote debugging port: " + debugPort);
+        }
+
+        private static bool IsDiscordSpawnWorker(string[] args)
+        {
+            return args != null
+                && args.Length > 0
+                && args[0].Equals(DiscordSpawnWorkerArg, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static int RunDiscordSpawnWorker(string[] args)
+        {
+            try
+            {
+                if (args.Length < 3)
+                {
+                    return 1;
+                }
+
+                int debugPort;
+                if (!int.TryParse(args[2], out debugPort))
+                {
+                    return 1;
+                }
+
+                ProcessStartInfo startInfo = new ProcessStartInfo
+                {
+                    FileName = args[1],
+                    Arguments = string.Format(
+                        "--remote-debugging-port={0} --remote-allow-origins=*",
+                        debugPort),
+                    UseShellExecute = true,
+                    WorkingDirectory = Path.GetDirectoryName(args[1])
+                };
+
+                using (Process process = Process.Start(startInfo))
+                {
+                    if (process == null)
+                    {
+                        return 1;
+                    }
+                }
+
+                return 0;
+            }
+            catch
+            {
+                return 1;
+            }
+        }
+
+        private static void StartDetachedProcess(string commandLine, string workingDirectory, string errorPrefix)
+        {
             STARTUPINFO startupInfo = new STARTUPINFO();
             startupInfo.cb = Marshal.SizeOf(typeof(STARTUPINFO));
             startupInfo.dwFlags = STARTF_USESHOWWINDOW;
-            startupInfo.wShowWindow = SW_HIDE;   // keep the new console hidden
+            startupInfo.wShowWindow = SW_HIDE;
 
             PROCESS_INFORMATION processInfo;
             bool started = CreateProcess(
@@ -555,22 +614,62 @@ namespace ClawInjector
                 IntPtr.Zero,
                 IntPtr.Zero,
                 false,                // don't inherit our handles
-                CREATE_NEW_CONSOLE,   // Discord gets its own console (hidden) to log into
+                DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW,
                 IntPtr.Zero,
-                Path.GetDirectoryName(discordPath),
+                workingDirectory,
                 ref startupInfo,
                 out processInfo);
 
             if (!started)
             {
                 throw new InvalidOperationException(
-                    "Failed to start Discord (CreateProcess error " + Marshal.GetLastWin32Error() + ").");
+                    errorPrefix + " (CreateProcess error " + Marshal.GetLastWin32Error() + ").");
             }
 
             CloseHandle(processInfo.hThread);
             CloseHandle(processInfo.hProcess);
+        }
 
-            PrintSubStep("Remote debugging port: " + debugPort);
+        private static string QuoteArgument(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return "\"\"";
+            }
+
+            if (value.IndexOfAny(new[] { ' ', '\t', '\n', '\v', '"' }) < 0)
+            {
+                return value;
+            }
+
+            StringBuilder result = new StringBuilder();
+            result.Append('"');
+            int backslashes = 0;
+
+            foreach (char c in value)
+            {
+                if (c == '\\')
+                {
+                    backslashes++;
+                    continue;
+                }
+
+                if (c == '"')
+                {
+                    result.Append('\\', backslashes * 2 + 1);
+                    result.Append('"');
+                    backslashes = 0;
+                    continue;
+                }
+
+                result.Append('\\', backslashes);
+                backslashes = 0;
+                result.Append(c);
+            }
+
+            result.Append('\\', backslashes * 2);
+            result.Append('"');
+            return result.ToString();
         }
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
