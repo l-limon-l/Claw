@@ -8,6 +8,7 @@ using System.Net.Http;
 using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -525,34 +526,95 @@ namespace ClawInjector
             }
         }
 
+        private const uint DETACHED_PROCESS = 0x00000008;
+
         private static void StartDiscord(string discordPath, int debugPort)
         {
-            // UseShellExecute=true launches Discord detached from the loader's console.
-            // With UseShellExecute=false the GUI child inherited our console, which caused
-            // two problems: Chromium/Electron dumped its remote-debugging logs into our
-            // window, and closing the loader sent CTRL_CLOSE to Discord (killing it too).
-            // Shell-launching a GUI app avoids console inheritance entirely.
-            // (CreateNoWindow is incompatible with UseShellExecute=true and is not needed
-            // here since Discord never opens a console of its own.)
-            ProcessStartInfo startInfo = new ProcessStartInfo
-            {
-                FileName = discordPath,
-                Arguments = string.Format(
-                    "--remote-debugging-port={0} --remote-allow-origins=*",
-                    debugPort),
-                UseShellExecute = true,
-                WorkingDirectory = Path.GetDirectoryName(discordPath)
-            };
+            // Launch Discord fully detached from the loader's console via CreateProcess
+            // with DETACHED_PROCESS and bInheritHandles=false. UseShellExecute=true was
+            // not enough: Electron/Chromium still wrote its remote-debugging logs into our
+            // window and closing the loader still killed Discord. With DETACHED_PROCESS the
+            // child gets NO console and does NOT inherit our stdout/stderr, so:
+            //   1. Discord's logs never appear in the loader window, and
+            //   2. closing the loader window can't send CTRL_CLOSE to Discord.
+            string commandLine = string.Format(
+                "\"{0}\" --remote-debugging-port={1} --remote-allow-origins=*",
+                discordPath, debugPort);
 
-            using (Process process = Process.Start(startInfo))
+            STARTUPINFO startupInfo = new STARTUPINFO();
+            startupInfo.cb = Marshal.SizeOf(typeof(STARTUPINFO));
+
+            PROCESS_INFORMATION processInfo;
+            bool started = CreateProcess(
+                null,
+                commandLine,
+                IntPtr.Zero,
+                IntPtr.Zero,
+                false,              // do not inherit our handles (no log leak)
+                DETACHED_PROCESS,   // no console (no CTRL_CLOSE propagation)
+                IntPtr.Zero,
+                Path.GetDirectoryName(discordPath),
+                ref startupInfo,
+                out processInfo);
+
+            if (!started)
             {
-                if (process == null)
-                {
-                    throw new InvalidOperationException("Failed to start Discord.");
-                }
+                throw new InvalidOperationException(
+                    "Failed to start Discord (CreateProcess error " + Marshal.GetLastWin32Error() + ").");
             }
 
+            CloseHandle(processInfo.hThread);
+            CloseHandle(processInfo.hProcess);
+
             PrintSubStep("Remote debugging port: " + debugPort);
+        }
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool CreateProcess(
+            string lpApplicationName,
+            string lpCommandLine,
+            IntPtr lpProcessAttributes,
+            IntPtr lpThreadAttributes,
+            bool bInheritHandles,
+            uint dwCreationFlags,
+            IntPtr lpEnvironment,
+            string lpCurrentDirectory,
+            ref STARTUPINFO lpStartupInfo,
+            out PROCESS_INFORMATION lpProcessInformation);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool CloseHandle(IntPtr hObject);
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct STARTUPINFO
+        {
+            public int cb;
+            public string lpReserved;
+            public string lpDesktop;
+            public string lpTitle;
+            public int dwX;
+            public int dwY;
+            public int dwXSize;
+            public int dwYSize;
+            public int dwXCountChars;
+            public int dwYCountChars;
+            public int dwFillAttribute;
+            public int dwFlags;
+            public short wShowWindow;
+            public short cbReserved2;
+            public IntPtr lpReserved2;
+            public IntPtr hStdInput;
+            public IntPtr hStdOutput;
+            public IntPtr hStdError;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct PROCESS_INFORMATION
+        {
+            public IntPtr hProcess;
+            public IntPtr hThread;
+            public int dwProcessId;
+            public int dwThreadId;
         }
 
         private static async Task<DevToolsTarget> WaitForDiscordTargetAsync(int debugPort)
