@@ -1,12 +1,13 @@
 {
   "name": "claw-main",
-  "version": "4.7.0",
+  "version": "4.7.1",
   "description": "<div align=\"center\">",
   "main": "index.js",
   "scripts": {
     "build": "esbuild src/main.js --bundle --outfile=index.js --format=iife --target=es2020",
     "check": "node --check index.js",
-    "release": "npm run build && npm run check"
+    "build:loader": "dotnet build loader-csharp/ClawInjector.csproj -c Release",
+    "release": "npm run build && npm run check && npm run build:loader"
   },
   "keywords": [],
   "author": "",

