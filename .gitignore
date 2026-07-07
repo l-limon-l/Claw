@@ -3,6 +3,7 @@ scratch/
 CloudStart/
 .env
 /Claw.exe
+build.bat
 loader-csharp/bin/
 loader-csharp/obj/
 loader-csharp/publish/
