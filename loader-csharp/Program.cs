@@ -7,9 +7,6 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
 using System.Net.WebSockets;
-using System.Reflection;
-using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,11 +16,7 @@ namespace ClawInjector
 {
     internal static class Program
     {
-        private const string PayloadResourceName = "Claw.payload.js";
-        private const string LoaderVersion = "4.7.1";
-        private const string VersionManifestUrl = "https://raw.githubusercontent.com/l-limon-l/Claw/main/latest.json";
-        private const string DefaultReleaseUrl = "https://github.com/l-limon-l/Claw/releases/tag/Main";
-        private const string DiscordSpawnWorkerArg = "--spawn-discord";
+        private const string DefaultPayloadUrl = "https://raw.githubusercontent.com/l-limon-l/Claw/main/index.js";
         private const int DefaultDebugPort = 10222;
         private static readonly TimeSpan DiscordTargetTimeout = TimeSpan.FromSeconds(90);
         private static readonly TimeSpan StableTargetDelay = TimeSpan.FromSeconds(8);
@@ -42,11 +35,6 @@ namespace ClawInjector
 
         public static int Main(string[] args)
         {
-            if (IsDiscordSpawnWorker(args))
-            {
-                return RunDiscordSpawnWorker(args);
-            }
-
             try
             {
                 ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
@@ -69,11 +57,6 @@ namespace ClawInjector
                 LoaderOptions options = LoaderOptions.Parse(args);
                 PrintLogo();
 
-                if (!await EnsureUpToDateAsync())
-                {
-                    return 2;
-                }
-
                 PrintStep("[1/5]", "Resolving Discord...");
                 string discordPath = ResolveDiscordExecutable(options.DiscordExe);
                 PrintSubStep(discordPath);
@@ -83,8 +66,8 @@ namespace ClawInjector
                 StopDiscordProcesses();
                 await WaitForDebugPortFreeAsync(options.DebugPort, TimeSpan.FromSeconds(10));
 
-                PrintStep("[3/5]", "Loading embedded payload...");
-                string payload = LoadEmbeddedPayload();
+                PrintStep("[3/5]", "Downloading cloud payload...");
+                string payload = await LoadPayloadAsync(options);
                 if (string.IsNullOrWhiteSpace(payload))
                 {
                     throw new InvalidOperationException("Payload is empty.");
@@ -117,168 +100,10 @@ namespace ClawInjector
             }
         }
 
-        private static string LoadEmbeddedPayload()
+        private static async Task<string> LoadPayloadAsync(LoaderOptions options)
         {
-            byte[] bytes = ReadEmbeddedPayloadBytes();
-
-            // Strip a UTF-8 BOM if present so the injected source stays clean.
-            if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
-            {
-                return new UTF8Encoding(false).GetString(bytes, 3, bytes.Length - 3);
-            }
-
-            return new UTF8Encoding(false).GetString(bytes);
-        }
-
-        private static byte[] ReadEmbeddedPayloadBytes()
-        {
-            // The payload is compiled into the executable as an embedded resource
-            // (see <EmbeddedResource> in ClawInjector.csproj), so there is no runtime
-            // download. The same bytes are hashed for the startup version check.
-            Assembly assembly = Assembly.GetExecutingAssembly();
-            using (Stream stream = assembly.GetManifestResourceStream(PayloadResourceName))
-            {
-                if (stream == null)
-                {
-                    throw new InvalidOperationException(
-                        "Embedded payload '" + PayloadResourceName + "' was not found. " +
-                        "Rebuild with a fresh index.js (run: npm run build, then dotnet build).");
-                }
-
-                using (MemoryStream buffer = new MemoryStream())
-                {
-                    stream.CopyTo(buffer);
-                    return buffer.ToArray();
-                }
-            }
-        }
-
-        private static async Task<bool> EnsureUpToDateAsync()
-        {
-            if (IsTruthy(Environment.GetEnvironmentVariable("CLAW_SKIP_VERSION_CHECK")))
-            {
-                return true;
-            }
-
-            VersionManifest manifest;
-            try
-            {
-                string json = await Http.GetStringAsync(VersionManifestUrl);
-                manifest = VersionManifest.Parse(Json.DeserializeObject(json) as IDictionary<string, object>);
-            }
-            catch
-            {
-                // Offline or manifest unreachable: don't block usage.
-                PrintWarning("Could not check for updates (offline?). Continuing with the current build.");
-                return true;
-            }
-
-            if (manifest == null)
-            {
-                PrintWarning("Update manifest was invalid. Continuing with the current build.");
-                return true;
-            }
-
-            string payloadHash;
-            string loaderHash;
-            try
-            {
-                payloadHash = ComputeSha256Hex(ReadEmbeddedPayloadBytes());
-                loaderHash = ComputeSelfSha256Hex();
-            }
-            catch
-            {
-                // If we can't hash our own files, don't block the user.
-                PrintWarning("Could not verify the local build. Continuing.");
-                return true;
-            }
-
-            if (HashesMatch(manifest.PayloadSha256, payloadHash) && HashesMatch(manifest.LoaderSha256, loaderHash))
-            {
-                PrintSubStep("Up to date (v" + LoaderVersion + ")");
-                return true;
-            }
-
-            string releaseUrl = string.IsNullOrWhiteSpace(manifest.ReleaseUrl) ? DefaultReleaseUrl : manifest.ReleaseUrl;
-            PromptUpdate(manifest.Version, releaseUrl);
-            return false;
-        }
-
-        private static bool HashesMatch(string expected, string actual)
-        {
-            // Nothing published to compare against => treat as a match (don't block).
-            if (string.IsNullOrWhiteSpace(expected))
-            {
-                return true;
-            }
-
-            return string.Equals(expected.Trim(), actual, StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static string ComputeSha256Hex(byte[] data)
-        {
-            using (SHA256 sha = SHA256.Create())
-            {
-                byte[] hash = sha.ComputeHash(data);
-                StringBuilder sb = new StringBuilder(hash.Length * 2);
-                foreach (byte b in hash)
-                {
-                    sb.Append(b.ToString("x2"));
-                }
-                return sb.ToString();
-            }
-        }
-
-        private static string ComputeSelfSha256Hex()
-        {
-            string exePath = Process.GetCurrentProcess().MainModule.FileName;
-            return ComputeSha256Hex(File.ReadAllBytes(exePath));
-        }
-
-        private static void PromptUpdate(string latestVersion, string releaseUrl)
-        {
-            Console.WriteLine();
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.Write("[UPDATE] ");
-            Console.ForegroundColor = ConsoleColor.White;
-            string versionSuffix = string.IsNullOrWhiteSpace(latestVersion) ? "" : (" (" + latestVersion + ")");
-            Console.WriteLine("A new version" + versionSuffix + " is available. This build (v" + LoaderVersion + ") is outdated.");
-            Console.WriteLine("Please download the latest loader to keep quests working.");
-            Console.ResetColor();
-            Console.WriteLine();
-
-            if (!Console.IsInputRedirected)
-            {
-                Console.WriteLine("Press Enter to open the download page...");
-                try { Console.ReadLine(); } catch { }
-            }
-
-            OpenUrl(releaseUrl);
-        }
-
-        private static void OpenUrl(string url)
-        {
-            try
-            {
-                Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
-            }
-            catch
-            {
-                Console.WriteLine("Open this link manually: " + url);
-            }
-        }
-
-        private static bool IsTruthy(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return false;
-            }
-
-            value = value.Trim();
-            return value == "1"
-                || value.Equals("true", StringComparison.OrdinalIgnoreCase)
-                || value.Equals("yes", StringComparison.OrdinalIgnoreCase);
+            PrintSubStep(options.PayloadUrl);
+            return await Http.GetStringAsync(options.PayloadUrl);
         }
 
         private static string ResolveDiscordExecutable(string explicitPath)
@@ -442,7 +267,7 @@ namespace ClawInjector
             {
                 ProcessStartInfo startInfo = new ProcessStartInfo
                 {
-                    FileName = GetSystemExecutablePath("netstat.exe"),
+                    FileName = "netstat",
                     Arguments = "-ano -p tcp",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
@@ -498,18 +323,6 @@ namespace ClawInjector
             return pids;
         }
 
-        private static string GetSystemExecutablePath(string fileName)
-        {
-            string systemRoot = Environment.GetFolderPath(Environment.SpecialFolder.System);
-            string fullPath = Path.Combine(systemRoot, fileName);
-            if (File.Exists(fullPath))
-            {
-                return fullPath;
-            }
-
-            throw new FileNotFoundException("Could not resolve required Windows system executable.", fullPath);
-        }
-
         private static bool IsDiscordProcess(Process process)
         {
             string[] names = { "Discord", "DiscordPTB", "DiscordCanary" };
@@ -530,194 +343,42 @@ namespace ClawInjector
             }
         }
 
-        private const uint DETACHED_PROCESS = 0x00000008;
-        private const uint CREATE_NEW_PROCESS_GROUP = 0x00000200;
-        private const uint CREATE_NO_WINDOW = 0x08000000;
-        private const int STARTF_USESHOWWINDOW = 0x00000001;
-        private const short SW_HIDE = 0;
-
         private static void StartDiscord(string discordPath, int debugPort)
         {
-            string loaderPath = Process.GetCurrentProcess().MainModule.FileName;
-            string commandLine = QuoteArgument(loaderPath)
-                + " " + DiscordSpawnWorkerArg
-                + " " + QuoteArgument(discordPath)
-                + " " + debugPort;
+            ProcessStartInfo startInfo = new ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                Arguments = string.Format(
+                    "/d /c start \"\" \"{0}\" --remote-debugging-port={1} --remote-allow-origins=*",
+                    discordPath,
+                    debugPort),
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
 
-            StartDetachedProcess(
-                commandLine,
-                Path.GetDirectoryName(loaderPath),
-                "Failed to start Discord launcher");
+            using (Process process = Process.Start(startInfo))
+            {
+                if (process == null)
+                {
+                    throw new InvalidOperationException("Failed to start Discord.");
+                }
+
+                if (!process.WaitForExit(5000))
+                {
+                    try { process.Kill(); } catch { }
+                    throw new TimeoutException("Discord launcher did not return in time.");
+                }
+
+                if (process.ExitCode != 0)
+                {
+                    string error = process.StandardError.ReadToEnd();
+                    throw new InvalidOperationException("Discord launcher failed: " + error);
+                }
+            }
 
             PrintSubStep("Remote debugging port: " + debugPort);
-        }
-
-        private static bool IsDiscordSpawnWorker(string[] args)
-        {
-            return args != null
-                && args.Length > 0
-                && args[0].Equals(DiscordSpawnWorkerArg, StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static int RunDiscordSpawnWorker(string[] args)
-        {
-            try
-            {
-                if (args.Length < 3)
-                {
-                    return 1;
-                }
-
-                int debugPort;
-                if (!int.TryParse(args[2], out debugPort))
-                {
-                    return 1;
-                }
-
-                ProcessStartInfo startInfo = new ProcessStartInfo
-                {
-                    FileName = args[1],
-                    Arguments = string.Format(
-                        "--remote-debugging-port={0} --remote-allow-origins=*",
-                        debugPort),
-                    UseShellExecute = true,
-                    WorkingDirectory = Path.GetDirectoryName(args[1])
-                };
-
-                using (Process process = Process.Start(startInfo))
-                {
-                    if (process == null)
-                    {
-                        return 1;
-                    }
-                }
-
-                return 0;
-            }
-            catch
-            {
-                return 1;
-            }
-        }
-
-        private static void StartDetachedProcess(string commandLine, string workingDirectory, string errorPrefix)
-        {
-            STARTUPINFO startupInfo = new STARTUPINFO();
-            startupInfo.cb = Marshal.SizeOf(typeof(STARTUPINFO));
-            startupInfo.dwFlags = STARTF_USESHOWWINDOW;
-            startupInfo.wShowWindow = SW_HIDE;
-
-            PROCESS_INFORMATION processInfo;
-            bool started = CreateProcess(
-                null,
-                commandLine,
-                IntPtr.Zero,
-                IntPtr.Zero,
-                false,                // don't inherit our handles
-                DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW,
-                IntPtr.Zero,
-                workingDirectory,
-                ref startupInfo,
-                out processInfo);
-
-            if (!started)
-            {
-                throw new InvalidOperationException(
-                    errorPrefix + " (CreateProcess error " + Marshal.GetLastWin32Error() + ").");
-            }
-
-            CloseHandle(processInfo.hThread);
-            CloseHandle(processInfo.hProcess);
-        }
-
-        private static string QuoteArgument(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-            {
-                return "\"\"";
-            }
-
-            if (value.IndexOfAny(new[] { ' ', '\t', '\n', '\v', '"' }) < 0)
-            {
-                return value;
-            }
-
-            StringBuilder result = new StringBuilder();
-            result.Append('"');
-            int backslashes = 0;
-
-            foreach (char c in value)
-            {
-                if (c == '\\')
-                {
-                    backslashes++;
-                    continue;
-                }
-
-                if (c == '"')
-                {
-                    result.Append('\\', backslashes * 2 + 1);
-                    result.Append('"');
-                    backslashes = 0;
-                    continue;
-                }
-
-                result.Append('\\', backslashes);
-                backslashes = 0;
-                result.Append(c);
-            }
-
-            result.Append('\\', backslashes * 2);
-            result.Append('"');
-            return result.ToString();
-        }
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        private static extern bool CreateProcess(
-            string lpApplicationName,
-            string lpCommandLine,
-            IntPtr lpProcessAttributes,
-            IntPtr lpThreadAttributes,
-            bool bInheritHandles,
-            uint dwCreationFlags,
-            IntPtr lpEnvironment,
-            string lpCurrentDirectory,
-            ref STARTUPINFO lpStartupInfo,
-            out PROCESS_INFORMATION lpProcessInformation);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool CloseHandle(IntPtr hObject);
-
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-        private struct STARTUPINFO
-        {
-            public int cb;
-            public string lpReserved;
-            public string lpDesktop;
-            public string lpTitle;
-            public int dwX;
-            public int dwY;
-            public int dwXSize;
-            public int dwYSize;
-            public int dwXCountChars;
-            public int dwYCountChars;
-            public int dwFillAttribute;
-            public int dwFlags;
-            public short wShowWindow;
-            public short cbReserved2;
-            public IntPtr lpReserved2;
-            public IntPtr hStdInput;
-            public IntPtr hStdOutput;
-            public IntPtr hStdError;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct PROCESS_INFORMATION
-        {
-            public IntPtr hProcess;
-            public IntPtr hThread;
-            public int dwProcessId;
-            public int dwThreadId;
         }
 
         private static async Task<DevToolsTarget> WaitForDiscordTargetAsync(int debugPort)
@@ -788,7 +449,9 @@ namespace ClawInjector
         {
             return !string.IsNullOrWhiteSpace(url)
                 && (url.StartsWith("https://discord.com/app", StringComparison.OrdinalIgnoreCase)
-                    || url.StartsWith("https://discord.com/channels", StringComparison.OrdinalIgnoreCase));
+                    || url.StartsWith("https://discord.com/channels", StringComparison.OrdinalIgnoreCase)
+                    || url.StartsWith("https://discordapp.com/app", StringComparison.OrdinalIgnoreCase)
+                    || url.StartsWith("https://discordapp.com/channels", StringComparison.OrdinalIgnoreCase));
         }
 
         private static async Task<IReadOnlyList<DevToolsTarget>> GetDevToolsTargetsAsync(int port)
@@ -1081,15 +744,6 @@ namespace ClawInjector
             Console.WriteLine();
         }
 
-        private static void PrintWarning(string message)
-        {
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.Write("[WARN] ");
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine(message);
-            Console.ResetColor();
-        }
-
         private static void PrintSuccess(string message)
         {
             Console.WriteLine();
@@ -1147,38 +801,16 @@ namespace ClawInjector
             public string WebSocketDebuggerUrl { get; set; }
         }
 
-        private sealed class VersionManifest
-        {
-            public string Version { get; set; }
-            public string PayloadSha256 { get; set; }
-            public string LoaderSha256 { get; set; }
-            public string ReleaseUrl { get; set; }
-
-            public static VersionManifest Parse(IDictionary<string, object> dict)
-            {
-                if (dict == null)
-                {
-                    return null;
-                }
-
-                return new VersionManifest
-                {
-                    Version = GetString(dict, "version"),
-                    PayloadSha256 = GetString(dict, "payloadSha256"),
-                    LoaderSha256 = GetString(dict, "loaderSha256"),
-                    ReleaseUrl = GetString(dict, "releaseUrl")
-                };
-            }
-        }
-
         private sealed class LoaderOptions
         {
             public int DebugPort { get; private set; }
+            public string PayloadUrl { get; private set; }
             public string DiscordExe { get; private set; }
 
             public static LoaderOptions Parse(string[] args)
             {
                 int debugPort = ParseInt(Environment.GetEnvironmentVariable("CLAW_DEBUG_PORT")) ?? DefaultDebugPort;
+                string payloadUrl = Environment.GetEnvironmentVariable("CLAW_PAYLOAD_URL") ?? DefaultPayloadUrl;
                 string discordExe = Environment.GetEnvironmentVariable("CLAW_DISCORD_EXE");
 
                 for (int i = 0; i < args.Length; i++)
@@ -1210,6 +842,10 @@ namespace ClawInjector
                             if (!parsedPort.HasValue) throw new ArgumentException("Port must be a number.");
                             debugPort = parsedPort.Value;
                             break;
+                        case "--payload-url":
+                            if (i + 1 >= args.Length) throw new ArgumentException("Missing value for --payload-url.");
+                            payloadUrl = args[++i];
+                            break;
                         case "--discord-exe":
                             if (i + 1 >= args.Length) throw new ArgumentException("Missing value for --discord-exe.");
                             discordExe = args[++i];
@@ -1220,6 +856,7 @@ namespace ClawInjector
                 return new LoaderOptions
                 {
                     DebugPort = debugPort,
+                    PayloadUrl = payloadUrl,
                     DiscordExe = discordExe
                 };
             }
