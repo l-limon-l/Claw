@@ -65,6 +65,18 @@ export const Tasks = {
 
     sanitize(name) { return name.replace(/[^a-zA-Z0-9 ]/g, "").trim().replace(/\s+/g, " "); },
 
+    /**
+     * userStatus.progress is a plain object over REST, but dispatched payloads go through
+     * Discord's client transform first — it may arrive as a Map. Bracket notation on a Map
+     * returns undefined, silently looking like "no progress". Handle both shapes.
+     */
+    readProgress(userStatus, key) {
+        const p = userStatus?.progress;
+        if (!p) return userStatus?.streamProgressSeconds ?? 0;
+        const entry = p instanceof Map ? p.get(key) : p[key];
+        return entry?.value ?? userStatus?.streamProgressSeconds ?? 0;
+    },
+
     detectType(cfg, applicationId) {
         const taskKeys = Object.keys(cfg.tasks);
         const typeMap = [
@@ -81,12 +93,15 @@ export const Tasks = {
 
         for (const { key, type } of typeMap) {
             const keyName = taskKeys.find(k => k.includes(key));
-            if (keyName) return { type, keyName, target: cfg.tasks[keyName]?.target ?? 0 };
+            if (keyName) {
+                const appId = cfg.tasks[keyName]?.applications?.[0]?.id ?? applicationId ?? null;
+                return { type, keyName, target: cfg.tasks[keyName]?.target ?? 0, appId };
+            }
         }
 
         if (applicationId) {
             const keyName = taskKeys[0];
-            return { type: "GAME", keyName, target: cfg.tasks[keyName]?.target ?? 0 };
+            return { type: "GAME", keyName, target: cfg.tasks[keyName]?.target ?? 0, appId: applicationId };
         }
 
         return null;
@@ -299,7 +314,7 @@ export const Tasks = {
     /* ── Task Runners ───────────────────────────────────────── */
 
     async VIDEO(q, t, s) {
-        let cur = s?.progress?.[t.keyName]?.value ?? s?.progress?.[t.type]?.value ?? 0;
+        let cur = Tasks.readProgress(s, t.keyName) || Tasks.readProgress(s, t.type);
         let failCount = 0;
 
         Logger.updateTask(q.id, { name: t.name, type: "VIDEO", cur, max: t.target, status: "RUNNING" });
@@ -390,7 +405,7 @@ export const Tasks = {
                 cleanupHook = () => Patcher.remove(game);
             }
 
-            const initialProg = q.userStatus?.progress?.[key]?.value ?? q.userStatus?.streamProgressSeconds ?? 0;
+            const initialProg = Tasks.readProgress(q.userStatus, key);
             Logger.updateTask(q.id, { name: t.name, type, cur: initialProg, max: t.target, status: "RUNNING" });
             Logger.log(`[Task] Started ${type}: ${gameData.name}`, 'info');
 
@@ -415,7 +430,7 @@ export const Tasks = {
                 if (!RUNTIME.running) { finish(); resolve(); return; }
                 if (d?.questId !== q.id) return;
 
-                const prog = d.userStatus?.progress?.[key]?.value ?? d.userStatus?.streamProgressSeconds ?? 0;
+                const prog = Tasks.readProgress(d.userStatus, key);
                 Logger.updateTask(q.id, { name: t.name, type, cur: prog, max: t.target, status: "RUNNING" });
 
                 if (prog >= t.target) {
@@ -431,7 +446,7 @@ export const Tasks = {
     },
 
     async ACHIEVEMENT(q, t, s) {
-        const initialProg = s?.progress?.[t.keyName]?.value ?? s?.progress?.ACHIEVEMENT_IN_ACTIVITY?.value ?? 0;
+        const initialProg = Tasks.readProgress(s, t.keyName) || Tasks.readProgress(s, 'ACHIEVEMENT_IN_ACTIVITY');
         Logger.updateTask(q.id, { name: t.name, type: "ACHIEVEMENT", cur: initialProg, max: t.target, status: "RUNNING" });
 
         let chan = null;
@@ -499,7 +514,7 @@ export const Tasks = {
         }
 
         const key = `call:${chan}:${rnd(1000, 9999)}`;
-        let cur = s?.progress?.[t.keyName]?.value ?? s?.progress?.PLAY_ACTIVITY?.value ?? 0;
+        let cur = Tasks.readProgress(s, t.keyName) || Tasks.readProgress(s, 'PLAY_ACTIVITY');
         let failCount = 0;
         Logger.updateTask(q.id, { name: t.name, type: "ACTIVITY", cur, max: t.target, status: "RUNNING" });
 

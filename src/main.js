@@ -332,13 +332,13 @@ if (window.clawLock) {
                             return;
                         }
 
-                        const { type, keyName, target } = typeData;
+                        const { type, keyName, target, appId } = typeData;
                         if (target <= 0) {
                             Logger.log(`[Quest] "${q.config?.messages?.questName}" has invalid target (${target}). Skipping.`, 'warn');
                             return;
                         }
 
-                        const tInfo = { id: q.id, appId: q.config?.application?.id ?? 0, name: q.config?.messages?.questName ?? "Unknown Quest", target, type, keyName };
+                        const tInfo = { id: q.id, appId: appId ?? 0, name: q.config?.messages?.questName ?? "Unknown Quest", target, type, keyName };
 
                         if (!q.userStatus?.enrolledAt && !RUNTIME.autoEnroll) {
                             Logger.updateTask(tInfo.id, { name: tInfo.name, type: tInfo.type, cur: 0, max: tInfo.target, status: "PENDING", actionRequired: 'ENROLL' });
@@ -347,7 +347,7 @@ if (window.clawLock) {
 
                         if (Logger.tasks.has(q.id) && Logger.tasks.get(q.id).status === "RUNNING") return;
 
-                        const queueProg = q.userStatus?.progress?.[tInfo.keyName]?.value ?? q.userStatus?.streamProgressSeconds ?? 0;
+                        const queueProg = Tasks.readProgress(q.userStatus, tInfo.keyName);
                         Logger.updateTask(tInfo.id, { name: tInfo.name, type: tInfo.type, cur: queueProg, max: tInfo.target, status: "QUEUE", actionRequired: null });
 
                         const taskFunc = async () => {
