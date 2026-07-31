@@ -183,7 +183,7 @@ export const Tasks = {
         }
 
         try {
-            const helper = window.VencordNative?.pluginHelpers?.OrionQuests;
+            const helper = window.VencordNative?.pluginHelpers?.Claw;
             if (helper) {
                 const u = new URL(url);
                 const appId = u.hostname.split('.')[0];
