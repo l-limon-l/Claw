@@ -103,7 +103,25 @@ namespace ClawInjector
         private static async Task<string> LoadPayloadAsync(LoaderOptions options)
         {
             PrintSubStep(options.PayloadUrl);
-            return await Http.GetStringAsync(options.PayloadUrl);
+            string localFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "index.js");
+            if (!File.Exists(localFile))
+            {
+                localFile = Path.Combine(Directory.GetCurrentDirectory(), "index.js");
+            }
+
+            try
+            {
+                return await Http.GetStringAsync(options.PayloadUrl);
+            }
+            catch (Exception)
+            {
+                if (File.Exists(localFile))
+                {
+                    PrintSubStep("Network request failed, using local index.js");
+                    return File.ReadAllText(localFile);
+                }
+                throw;
+            }
         }
 
         private static string ResolveDiscordExecutable(string explicitPath)
@@ -447,11 +465,12 @@ namespace ClawInjector
 
         private static bool IsDiscordAppUrl(string url)
         {
-            return !string.IsNullOrWhiteSpace(url)
-                && (url.StartsWith("https://discord.com/app", StringComparison.OrdinalIgnoreCase)
-                    || url.StartsWith("https://discord.com/channels", StringComparison.OrdinalIgnoreCase)
-                    || url.StartsWith("https://discordapp.com/app", StringComparison.OrdinalIgnoreCase)
-                    || url.StartsWith("https://discordapp.com/channels", StringComparison.OrdinalIgnoreCase));
+            if (string.IsNullOrWhiteSpace(url)) return false;
+            string u = url.ToLowerInvariant();
+            return u.Contains("discord.com")
+                || u.Contains("discordapp.com")
+                || u.Contains("canary.discord.com")
+                || u.Contains("ptb.discord.com");
         }
 
         private static async Task<IReadOnlyList<DevToolsTarget>> GetDevToolsTargetsAsync(int port)

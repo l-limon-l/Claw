@@ -130,8 +130,11 @@
             if (!exp || typeof exp !== "object") continue;
             for (const key of Object.keys(exp)) {
               const prop = exp[key];
-              if (prop && typeof prop === "object" && prop.__proto__?.constructor?.displayName === storeName) {
-                return prop;
+              if (prop && typeof prop === "object") {
+                const name = prop.__proto__?.constructor?.displayName || prop.constructor?.displayName;
+                if (name === storeName || storeName === "QuestStore" && name === "QuestsStore") {
+                  return prop;
+                }
               }
             }
           } catch {
@@ -263,22 +266,54 @@
       Mods = {};
       Patcher = {
         games: [],
-        realGames: null,
-        realPID: null,
+        real: {},
         active: false,
         init(Store) {
           if (!Store) return;
-          this.realGames = Store.getRunningGames;
-          this.realPID = Store.getGameForPID;
+          const methods = [
+            "getRunningGames",
+            "getGameForPID",
+            "getVisibleGame",
+            "getVisibleRunningGames",
+            "getRunningDiscordApplicationIds",
+            "getCandidateGames"
+          ];
+          this.real = {};
+          for (const m of methods) {
+            if (typeof Store[m] === "function") {
+              this.real[m] = Store[m];
+            }
+          }
         },
         toggle(on) {
+          if (!Mods.RunStore) return;
           if (on && !this.active) {
-            Mods.RunStore.getRunningGames = () => [...this.realGames.call(Mods.RunStore), ...this.games];
-            Mods.RunStore.getGameForPID = (pid) => this.games.find((g) => g.pid === pid) || this.realPID.call(Mods.RunStore, pid);
+            if (this.real.getRunningGames) {
+              Mods.RunStore.getRunningGames = () => [...this.real.getRunningGames.call(Mods.RunStore) || [], ...this.games];
+            }
+            if (this.real.getGameForPID) {
+              Mods.RunStore.getGameForPID = (pid) => this.games.find((g) => g.pid === pid) || this.real.getGameForPID.call(Mods.RunStore, pid);
+            }
+            if (this.real.getVisibleGame) {
+              Mods.RunStore.getVisibleGame = () => this.games[0] || (this.real.getVisibleGame ? this.real.getVisibleGame.call(Mods.RunStore) : null);
+            }
+            if (this.real.getVisibleRunningGames) {
+              Mods.RunStore.getVisibleRunningGames = () => [...this.real.getVisibleRunningGames.call(Mods.RunStore) || [], ...this.games];
+            }
+            if (this.real.getRunningDiscordApplicationIds) {
+              Mods.RunStore.getRunningDiscordApplicationIds = () => [
+                ...this.real.getRunningDiscordApplicationIds.call(Mods.RunStore) || [],
+                ...this.games.map((g) => g.id).filter(Boolean)
+              ];
+            }
+            if (this.real.getCandidateGames) {
+              Mods.RunStore.getCandidateGames = () => [...this.real.getCandidateGames.call(Mods.RunStore) || [], ...this.games];
+            }
             this.active = true;
           } else if (!on && this.active) {
-            Mods.RunStore.getRunningGames = this.realGames;
-            Mods.RunStore.getGameForPID = this.realPID;
+            for (const [m, fn] of Object.entries(this.real)) {
+              Mods.RunStore[m] = fn;
+            }
             this.active = false;
           }
         },
@@ -306,7 +341,7 @@
             type: CONST.EVT.GAME,
             added,
             removed,
-            games: Mods.RunStore.getRunningGames()
+            games: Mods.RunStore?.getRunningGames ? Mods.RunStore.getRunningGames() : []
           });
         },
         rpc(g) {
