@@ -26,7 +26,7 @@ export const RUNTIME = {
     autoClaim: false,
     playSound: false,
     notify: false,
-    randomDelay: false
+    randomDelay: true
 };
 
 export const ICONS = Object.freeze({

@@ -88,7 +88,7 @@ if (window.clawLock) {
                         </div>
                         <div class="claw-option">
                             <span class="claw-option-label">Anti-detection delay</span>
-                            <label class="claw-toggle"><input type="checkbox" id="opt-delay"><span class="slider"></span></label>
+                            <label class="claw-toggle"><input type="checkbox" id="opt-delay" checked><span class="slider"></span></label>
                         </div>
                     </div>
                     <div class="quest-pick-actions">
@@ -141,7 +141,7 @@ if (window.clawLock) {
                             </div>
                             <div class="claw-option">
                                 <span class="claw-option-label">Anti-detection delay</span>
-                                <label class="claw-toggle"><input type="checkbox" id="opt-delay"><span class="slider"></span></label>
+                                <label class="claw-toggle"><input type="checkbox" id="opt-delay" checked><span class="slider"></span></label>
                             </div>
                         </div>
                         <div class="quest-pick-actions">

@@ -46,7 +46,7 @@
         autoClaim: false,
         playSound: false,
         notify: false,
-        randomDelay: false
+        randomDelay: true
       };
       ICONS = Object.freeze({
         BOLT: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.29-.62L14.5 3h1l-1 7h3.5c.58 0 .57.32.29.62L11 21z"/></svg>`,
@@ -1865,7 +1865,7 @@
                         </div>
                         <div class="claw-option">
                             <span class="claw-option-label">Anti-detection delay</span>
-                            <label class="claw-toggle"><input type="checkbox" id="opt-delay"><span class="slider"></span></label>
+                            <label class="claw-toggle"><input type="checkbox" id="opt-delay" checked><span class="slider"></span></label>
                         </div>
                     </div>
                     <div class="quest-pick-actions">
@@ -1918,7 +1918,7 @@
                             </div>
                             <div class="claw-option">
                                 <span class="claw-option-label">Anti-detection delay</span>
-                                <label class="claw-toggle"><input type="checkbox" id="opt-delay"><span class="slider"></span></label>
+                                <label class="claw-toggle"><input type="checkbox" id="opt-delay" checked><span class="slider"></span></label>
                             </div>
                         </div>
                         <div class="quest-pick-actions">
