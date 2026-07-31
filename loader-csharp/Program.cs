@@ -17,6 +17,8 @@ namespace ClawInjector
     internal static class Program
     {
         private const string DefaultPayloadUrl = "https://raw.githubusercontent.com/l-limon-l/Claw/main/index.js";
+        private const string DefaultLatestMetadataUrl = "https://raw.githubusercontent.com/l-limon-l/Claw/main/latest.json";
+        private const string DefaultBinaryDownloadUrl = "https://raw.githubusercontent.com/l-limon-l/Claw/main/loader-csharp/bin/Release/net48/Claw.exe";
         private const int DefaultDebugPort = 10222;
         private static readonly TimeSpan DiscordTargetTimeout = TimeSpan.FromSeconds(90);
         private static readonly TimeSpan StableTargetDelay = TimeSpan.FromSeconds(8);
@@ -56,6 +58,7 @@ namespace ClawInjector
             {
                 LoaderOptions options = LoaderOptions.Parse(args);
                 PrintLogo();
+                await CheckSelfUpdateAsync(options);
 
                 PrintStep("[1/5]", "Resolving Discord...");
                 string discordPath = ResolveDiscordExecutable(options.DiscordExe);
@@ -824,12 +827,16 @@ namespace ClawInjector
         {
             public int DebugPort { get; private set; }
             public string PayloadUrl { get; private set; }
+            public string LatestMetadataUrl { get; private set; }
+            public string BinaryDownloadUrl { get; private set; }
             public string DiscordExe { get; private set; }
 
             public static LoaderOptions Parse(string[] args)
             {
                 int debugPort = ParseInt(Environment.GetEnvironmentVariable("CLAW_DEBUG_PORT")) ?? DefaultDebugPort;
                 string payloadUrl = Environment.GetEnvironmentVariable("CLAW_PAYLOAD_URL") ?? DefaultPayloadUrl;
+                string metadataUrl = Environment.GetEnvironmentVariable("CLAW_METADATA_URL") ?? DefaultLatestMetadataUrl;
+                string binaryUrl = Environment.GetEnvironmentVariable("CLAW_BINARY_URL") ?? DefaultBinaryDownloadUrl;
                 string discordExe = Environment.GetEnvironmentVariable("CLAW_DISCORD_EXE");
 
                 for (int i = 0; i < args.Length; i++)
@@ -876,6 +883,8 @@ namespace ClawInjector
                 {
                     DebugPort = debugPort,
                     PayloadUrl = payloadUrl,
+                    LatestMetadataUrl = metadataUrl,
+                    BinaryDownloadUrl = binaryUrl,
                     DiscordExe = discordExe
                 };
             }
@@ -887,5 +896,96 @@ namespace ClawInjector
             }
         }
 
+        private static async Task CheckSelfUpdateAsync(LoaderOptions options)
+        {
+            if (string.Equals(Environment.GetEnvironmentVariable("CLAW_NO_UPDATE"), "true", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            try
+            {
+                System.Reflection.Assembly entry = System.Reflection.Assembly.GetEntryAssembly();
+                string exePath = entry == null ? "" : entry.Location;
+                if (string.IsNullOrEmpty(exePath) || !File.Exists(exePath)) return;
+
+                using (CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromSeconds(4)))
+                {
+                    HttpResponseMessage response = await Http.GetAsync(options.LatestMetadataUrl, cts.Token);
+                    if (!response.IsSuccessStatusCode) return;
+
+                    string json = await response.Content.ReadAsStringAsync();
+                    IDictionary<string, object> metadata = Json.DeserializeObject(json) as IDictionary<string, object>;
+                    if (metadata == null) return;
+
+                    string remoteLoaderHash = GetString(metadata, "loaderSha256").Trim().ToLowerInvariant();
+                    if (string.IsNullOrEmpty(remoteLoaderHash) || remoteLoaderHash.Length != 64) return;
+
+                    string localHash = ComputeFileSha256(exePath).ToLowerInvariant();
+                    if (string.Equals(localHash, remoteLoaderHash, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return;
+                    }
+
+                    PrintSubStep("New loader binary version detected. Updating...");
+                    string updatePath = exePath + ".new";
+                    byte[] newBytes = await Http.GetByteArrayAsync(options.BinaryDownloadUrl);
+                    if (newBytes == null || newBytes.Length == 0) return;
+
+                    string downloadedHash = ComputeSha256(newBytes).ToLowerInvariant();
+                    if (!string.Equals(downloadedHash, remoteLoaderHash, StringComparison.OrdinalIgnoreCase))
+                    {
+                        PrintSubStep("Binary hash mismatch, skipping auto-update.");
+                        return;
+                    }
+
+                    File.WriteAllBytes(updatePath, newBytes);
+
+                    string cmdArgs = string.Format(
+                        "/c timeout /t 1 /nobreak > NUL & move /y \"{0}\" \"{1}\" & start \"\" \"{1}\"",
+                        updatePath,
+                        exePath);
+
+                    ProcessStartInfo startInfo = new ProcessStartInfo
+                    {
+                        FileName = "cmd.exe",
+                        Arguments = cmdArgs,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+
+                    Process.Start(startInfo);
+                    PrintSuccess("Claw binary auto-updated! Restarting...");
+                    Environment.Exit(0);
+                }
+            }
+            catch
+            {
+                // Non-fatal fallback: proceed with current binary if update check fails
+            }
+        }
+
+        private static string ComputeFileSha256(string filePath)
+        {
+            using (System.Security.Cryptography.SHA256 sha = System.Security.Cryptography.SHA256.Create())
+            using (FileStream fs = File.OpenRead(filePath))
+            {
+                byte[] hash = sha.ComputeHash(fs);
+                StringBuilder sb = new StringBuilder(hash.Length * 2);
+                foreach (byte b in hash) sb.AppendFormat("{0:x2}", b);
+                return sb.ToString();
+            }
+        }
+
+        private static string ComputeSha256(byte[] data)
+        {
+            using (System.Security.Cryptography.SHA256 sha = System.Security.Cryptography.SHA256.Create())
+            {
+                byte[] hash = sha.ComputeHash(data);
+                StringBuilder sb = new StringBuilder(hash.Length * 2);
+                foreach (byte b in hash) sb.AppendFormat("{0:x2}", b);
+                return sb.ToString();
+            }
+        }
     }
 }
