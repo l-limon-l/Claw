@@ -921,8 +921,9 @@
             RUNTIME.cleanups.add(finish);
           });
         },
-        async ACHIEVEMENT(q, t) {
-          Logger.updateTask(q.id, { name: t.name, type: "ACHIEVEMENT", cur: 0, max: t.target, status: "RUNNING" });
+        async ACHIEVEMENT(q, t, s) {
+          const initialProg = s?.progress?.[t.keyName]?.value ?? s?.progress?.ACHIEVEMENT_IN_ACTIVITY?.value ?? 0;
+          Logger.updateTask(q.id, { name: t.name, type: "ACHIEVEMENT", cur: initialProg, max: t.target, status: "RUNNING" });
           let chan = null;
           try {
             chan = Mods.ChanStore?.getSortedPrivateChannels()?.[0]?.id ?? Object.values(Mods.GuildChanStore?.getAllGuilds() ?? {}).find((g) => g?.VOCAL?.length)?.VOCAL?.[0]?.channel?.id;
@@ -932,7 +933,7 @@
           if (chan) {
             Logger.log(`[Task] Attempting heartbeat spoofing for "${t.name}"...`, "info");
             const key = `call:${chan}:${rnd(1e3, 9999)}`;
-            let cur = 0;
+            let cur = initialProg;
             let failCount = 0;
             while (cur < t.target && RUNTIME.running) {
               try {
@@ -970,7 +971,7 @@
           Logger.log(`[Task] Skipping "${t.name}" \u2014 no auto-completion path worked (heartbeat rejected, bypass blocked). Likely age-gated/delisted on your account.`, "warn");
           return Tasks.failTask(q, t, "Cannot auto-complete");
         },
-        async ACTIVITY(q, t) {
+        async ACTIVITY(q, t, s) {
           let chan = null;
           try {
             chan = Mods.ChanStore?.getSortedPrivateChannels()?.[0]?.id ?? Object.values(Mods.GuildChanStore?.getAllGuilds() ?? {}).find((g) => g?.VOCAL?.length)?.VOCAL?.[0]?.channel?.id;
@@ -981,7 +982,7 @@
             return Tasks.failTask(q, t, "No voice channel found");
           }
           const key = `call:${chan}:${rnd(1e3, 9999)}`;
-          let cur = 0;
+          let cur = s?.progress?.[t.keyName]?.value ?? s?.progress?.PLAY_ACTIVITY?.value ?? 0;
           let failCount = 0;
           Logger.updateTask(q.id, { name: t.name, type: "ACTIVITY", cur, max: t.target, status: "RUNNING" });
           const startTime = Date.now();
@@ -2106,7 +2107,8 @@
                     return;
                   }
                   if (Logger.tasks.has(q.id) && Logger.tasks.get(q.id).status === "RUNNING") return;
-                  Logger.updateTask(tInfo.id, { name: tInfo.name, type: tInfo.type, cur: 0, max: tInfo.target, status: "QUEUE", actionRequired: null });
+                  const queueProg = q.userStatus?.progress?.[tInfo.keyName]?.value ?? q.userStatus?.streamProgressSeconds ?? 0;
+                  Logger.updateTask(tInfo.id, { name: tInfo.name, type: tInfo.type, cur: queueProg, max: tInfo.target, status: "QUEUE", actionRequired: null });
                   const taskFunc = async () => {
                     if (!q.userStatus?.enrolledAt) {
                       Logger.log(`[Enroll] Accepting quest: ${tInfo.name}`, "info");
@@ -2125,7 +2127,7 @@
                       }
                     }
                     if (type === "WATCH_VIDEO") return Tasks.VIDEO(q, tInfo, q.userStatus);
-                    if (type === "ACHIEVEMENT") return Tasks.ACHIEVEMENT(q, tInfo);
+                    if (type === "ACHIEVEMENT") return Tasks.ACHIEVEMENT(q, tInfo, q.userStatus);
                     const runner = type === "STREAM" ? Tasks.STREAM : type === "ACTIVITY" ? Tasks.ACTIVITY : Tasks.GAME;
                     return runner(q, tInfo, q.userStatus);
                   };

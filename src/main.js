@@ -347,7 +347,8 @@ if (window.clawLock) {
 
                         if (Logger.tasks.has(q.id) && Logger.tasks.get(q.id).status === "RUNNING") return;
 
-                        Logger.updateTask(tInfo.id, { name: tInfo.name, type: tInfo.type, cur: 0, max: tInfo.target, status: "QUEUE", actionRequired: null });
+                        const queueProg = q.userStatus?.progress?.[tInfo.keyName]?.value ?? q.userStatus?.streamProgressSeconds ?? 0;
+                        Logger.updateTask(tInfo.id, { name: tInfo.name, type: tInfo.type, cur: queueProg, max: tInfo.target, status: "QUEUE", actionRequired: null });
 
                         const taskFunc = async () => {
                             if (!q.userStatus?.enrolledAt) {
@@ -368,7 +369,7 @@ if (window.clawLock) {
                             }
 
                             if (type === "WATCH_VIDEO") return Tasks.VIDEO(q, tInfo, q.userStatus);
-                            if (type === "ACHIEVEMENT") return Tasks.ACHIEVEMENT(q, tInfo);
+                            if (type === "ACHIEVEMENT") return Tasks.ACHIEVEMENT(q, tInfo, q.userStatus);
                             const runner = type === "STREAM" ? Tasks.STREAM : (type === "ACTIVITY" ? Tasks.ACTIVITY : Tasks.GAME);
                             return runner(q, tInfo, q.userStatus);
                         };

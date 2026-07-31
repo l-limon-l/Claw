@@ -430,8 +430,9 @@ export const Tasks = {
         });
     },
 
-    async ACHIEVEMENT(q, t) {
-        Logger.updateTask(q.id, { name: t.name, type: "ACHIEVEMENT", cur: 0, max: t.target, status: "RUNNING" });
+    async ACHIEVEMENT(q, t, s) {
+        const initialProg = s?.progress?.[t.keyName]?.value ?? s?.progress?.ACHIEVEMENT_IN_ACTIVITY?.value ?? 0;
+        Logger.updateTask(q.id, { name: t.name, type: "ACHIEVEMENT", cur: initialProg, max: t.target, status: "RUNNING" });
 
         let chan = null;
         try {
@@ -442,7 +443,7 @@ export const Tasks = {
         if (chan) {
             Logger.log(`[Task] Attempting heartbeat spoofing for "${t.name}"...`, 'info');
             const key = `call:${chan}:${rnd(1000, 9999)}`;
-            let cur = 0;
+            let cur = initialProg;
             let failCount = 0;
 
             while (cur < t.target && RUNTIME.running) {
@@ -484,7 +485,7 @@ export const Tasks = {
         return Tasks.failTask(q, t, 'Cannot auto-complete');
     },
 
-    async ACTIVITY(q, t) {
+    async ACTIVITY(q, t, s) {
         let chan = null;
         try {
             chan = Mods.ChanStore?.getSortedPrivateChannels()?.[0]?.id
@@ -498,7 +499,7 @@ export const Tasks = {
         }
 
         const key = `call:${chan}:${rnd(1000, 9999)}`;
-        let cur = 0;
+        let cur = s?.progress?.[t.keyName]?.value ?? s?.progress?.PLAY_ACTIVITY?.value ?? 0;
         let failCount = 0;
         Logger.updateTask(q.id, { name: t.name, type: "ACTIVITY", cur, max: t.target, status: "RUNNING" });
 
