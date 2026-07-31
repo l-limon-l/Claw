@@ -45,7 +45,8 @@
         autoEnroll: true,
         autoClaim: false,
         playSound: false,
-        notify: false
+        notify: false,
+        randomDelay: false
       };
       ICONS = Object.freeze({
         BOLT: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.29-.62L14.5 3h1l-1 7h3.5c.58 0 .57.32.29.62L11 21z"/></svg>`,
@@ -1862,6 +1863,10 @@
                             <span class="claw-option-label">Desktop notifications</span>
                             <label class="claw-toggle"><input type="checkbox" id="opt-notify"><span class="slider"></span></label>
                         </div>
+                        <div class="claw-option">
+                            <span class="claw-option-label">Anti-detection delay</span>
+                            <label class="claw-toggle"><input type="checkbox" id="opt-delay"><span class="slider"></span></label>
+                        </div>
                     </div>
                     <div class="quest-pick-actions">
                         <button class="quest-pick-btn toggle disabled" id="claw-toggle-all">DESELECT ALL</button>
@@ -1910,6 +1915,10 @@
                             <div class="claw-option">
                                 <span class="claw-option-label">Desktop notifications</span>
                                 <label class="claw-toggle"><input type="checkbox" id="opt-notify"><span class="slider"></span></label>
+                            </div>
+                            <div class="claw-option">
+                                <span class="claw-option-label">Anti-detection delay</span>
+                                <label class="claw-toggle"><input type="checkbox" id="opt-delay"><span class="slider"></span></label>
                             </div>
                         </div>
                         <div class="quest-pick-actions">
@@ -1980,7 +1989,8 @@
                 autoEnroll: $("#opt-enroll").checked,
                 autoClaim: $("#opt-claim").checked,
                 playSound: $("#opt-sound").checked,
-                notify: $("#opt-notify").checked
+                notify: $("#opt-notify").checked,
+                randomDelay: $("#opt-delay").checked
               };
               if (options.notify) {
                 try {
@@ -2044,8 +2054,9 @@
           RUNTIME.autoClaim = options.autoClaim;
           RUNTIME.playSound = options.playSound;
           RUNTIME.notify = options.notify;
+          RUNTIME.randomDelay = options.randomDelay;
           const selectedLabel = selected ? `${selected.size} quest(s)` : "all future eligible quests";
-          Logger.log(`[System] ${selectedLabel} selected. Auto-enroll: ${options.autoEnroll ? "ON" : "OFF"}, Auto-claim: ${options.autoClaim ? "ON" : "OFF"}`, "info");
+          Logger.log(`[System] ${selectedLabel} selected. Auto-enroll: ${options.autoEnroll ? "ON" : "OFF"}, Auto-claim: ${options.autoClaim ? "ON" : "OFF"}, Anti-detect delay: ${options.randomDelay ? "ON" : "OFF"}`, "info");
           let loopCount = 1;
           let isIdle = false;
           while (RUNTIME.running) {
@@ -2129,6 +2140,11 @@
                 const pGames = runConcurrent(queues.game, CONFIG.GAME_CONCURRENCY);
                 const pVideos = runConcurrent(queues.video, CONFIG.VIDEO_CONCURRENCY);
                 await Promise.all([pGames, pVideos]);
+                if (RUNTIME.randomDelay && RUNTIME.running) {
+                  const delaySec = rnd(60, 180);
+                  Logger.log(`[Anti-Detect] Injecting randomized delay (${delaySec}s) before next quest...`, "info");
+                  await sleep(delaySec * 1e3);
+                }
               } else {
                 if (needsAction) {
                   Logger.log("[System] Waiting for manual reward claim or action...", "warn");

@@ -25,7 +25,8 @@ export const RUNTIME = {
     autoEnroll: true,
     autoClaim: false,
     playSound: false,
-    notify: false
+    notify: false,
+    randomDelay: false
 };
 
 export const ICONS = Object.freeze({

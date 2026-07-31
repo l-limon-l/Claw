@@ -86,6 +86,10 @@ if (window.clawLock) {
                             <span class="claw-option-label">Desktop notifications</span>
                             <label class="claw-toggle"><input type="checkbox" id="opt-notify"><span class="slider"></span></label>
                         </div>
+                        <div class="claw-option">
+                            <span class="claw-option-label">Anti-detection delay</span>
+                            <label class="claw-toggle"><input type="checkbox" id="opt-delay"><span class="slider"></span></label>
+                        </div>
                     </div>
                     <div class="quest-pick-actions">
                         <button class="quest-pick-btn toggle disabled" id="claw-toggle-all">DESELECT ALL</button>
@@ -134,6 +138,10 @@ if (window.clawLock) {
                             <div class="claw-option">
                                 <span class="claw-option-label">Desktop notifications</span>
                                 <label class="claw-toggle"><input type="checkbox" id="opt-notify"><span class="slider"></span></label>
+                            </div>
+                            <div class="claw-option">
+                                <span class="claw-option-label">Anti-detection delay</span>
+                                <label class="claw-toggle"><input type="checkbox" id="opt-delay"><span class="slider"></span></label>
                             </div>
                         </div>
                         <div class="quest-pick-actions">
@@ -208,7 +216,8 @@ if (window.clawLock) {
                     autoEnroll: $('#opt-enroll').checked,
                     autoClaim: $('#opt-claim').checked,
                     playSound: $('#opt-sound').checked,
-                    notify: $('#opt-notify').checked
+                    notify: $('#opt-notify').checked,
+                    randomDelay: $('#opt-delay').checked
                 };
 
                 if (options.notify) {
@@ -267,9 +276,10 @@ if (window.clawLock) {
         RUNTIME.autoClaim = options.autoClaim;
         RUNTIME.playSound = options.playSound;
         RUNTIME.notify = options.notify;
+        RUNTIME.randomDelay = options.randomDelay;
 
         const selectedLabel = selected ? `${selected.size} quest(s)` : 'all future eligible quests';
-        Logger.log(`[System] ${selectedLabel} selected. Auto-enroll: ${options.autoEnroll ? 'ON' : 'OFF'}, Auto-claim: ${options.autoClaim ? 'ON' : 'OFF'}`, 'info');
+        Logger.log(`[System] ${selectedLabel} selected. Auto-enroll: ${options.autoEnroll ? 'ON' : 'OFF'}, Auto-claim: ${options.autoClaim ? 'ON' : 'OFF'}, Anti-detect delay: ${options.randomDelay ? 'ON' : 'OFF'}`, 'info');
 
         let loopCount = 1;
         let isIdle = false;
@@ -377,6 +387,12 @@ if (window.clawLock) {
                     const pGames = runConcurrent(queues.game, CONFIG.GAME_CONCURRENCY);
                     const pVideos = runConcurrent(queues.video, CONFIG.VIDEO_CONCURRENCY);
                     await Promise.all([pGames, pVideos]);
+
+                    if (RUNTIME.randomDelay && RUNTIME.running) {
+                        const delaySec = rnd(60, 180);
+                        Logger.log(`[Anti-Detect] Injecting randomized delay (${delaySec}s) before next quest...`, 'info');
+                        await sleep(delaySec * 1000);
+                    }
                 } else {
                     if (needsAction) {
                         Logger.log('[System] Waiting for manual reward claim or action...', 'warn');
