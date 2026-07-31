@@ -18,7 +18,7 @@ namespace ClawInjector
     {
         private const string DefaultPayloadUrl = "https://raw.githubusercontent.com/l-limon-l/Claw/main/index.js";
         private const string DefaultLatestMetadataUrl = "https://raw.githubusercontent.com/l-limon-l/Claw/main/latest.json";
-        private const string DefaultBinaryDownloadUrl = "https://raw.githubusercontent.com/l-limon-l/Claw/main/loader-csharp/bin/Release/net48/Claw.exe";
+        private const string DefaultBinaryDownloadUrl = "https://github.com/l-limon-l/Claw/releases/download/Main/Claw.exe";
         private const int DefaultDebugPort = 10222;
         private static readonly TimeSpan DiscordTargetTimeout = TimeSpan.FromSeconds(90);
         private static readonly TimeSpan StableTargetDelay = TimeSpan.FromSeconds(8);
