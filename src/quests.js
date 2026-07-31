@@ -390,7 +390,8 @@ export const Tasks = {
                 cleanupHook = () => Patcher.remove(game);
             }
 
-            Logger.updateTask(q.id, { name: t.name, type, cur: 0, max: t.target, status: "RUNNING" });
+            const initialProg = q.userStatus?.progress?.[key]?.value ?? q.userStatus?.streamProgressSeconds ?? 0;
+            Logger.updateTask(q.id, { name: t.name, type, cur: initialProg, max: t.target, status: "RUNNING" });
             Logger.log(`[Task] Started ${type}: ${gameData.name}`, 'info');
 
             const finish = () => {
