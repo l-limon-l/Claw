@@ -64,6 +64,29 @@ export const Tasks = {
     _relayProbe: null,
 
     sanitize(name) { return name.replace(/[^a-zA-Z0-9 ]/g, "").trim().replace(/\s+/g, " "); },
+    
+    _streamKey() {
+        try {
+            const ownerId = Mods.UserStore?.getCurrentUser?.()?.id;
+            if (!ownerId) return null;
+
+            const dmChan = Mods.ChanStore?.getSortedPrivateChannels?.()?.[0]?.id;
+            if (dmChan) return `call:${dmChan}:${ownerId}`;
+
+            const guilds = Mods.GuildChanStore?.getAllGuilds?.() ?? {};
+            for (const g of Object.values(guilds)) {
+                const voiceChan = g?.VOCAL?.[0]?.channel;
+                if (voiceChan?.id) {
+                    const guildId = voiceChan.guild_id ?? g?.id;
+                    if (guildId) return `guild:${guildId}:${voiceChan.id}:${ownerId}`;
+                }
+            }
+            return null;
+        } catch (e) {
+            Logger.log(`[StreamKey] Failed to generate stream key: ${e.message}`, 'debug');
+            return null;
+        }
+    },
 
     /**
      * userStatus.progress is a plain object over REST, but dispatched payloads go through
@@ -80,30 +103,29 @@ export const Tasks = {
     detectType(cfg, applicationId) {
         const taskKeys = Object.keys(cfg.tasks);
         const typeMap = [
-            { key: "ACHIEVEMENT_IN_ACTIVITY", type: "ACHIEVEMENT" },
-            { key: "PLAY_ACTIVITY", type: "ACTIVITY" },
-            { key: "WATCH_VIDEO", type: "WATCH_VIDEO" },
-            { key: "STREAM_ON_DESKTOP", type: "STREAM" },
-            { key: "PLAY_ON_DESKTOP", type: "GAME" },
-            { key: "ACTIVITY", type: "ACTIVITY" },
-            { key: "VIDEO", type: "WATCH_VIDEO" },
-            { key: "STREAM", type: "STREAM" },
-            { key: "PLAY", type: "GAME" }
+            { match: k => k === "ACHIEVEMENT_IN_ACTIVITY", type: "ACHIEVEMENT" },
+            { match: k => k === "PLAY_ACTIVITY", type: "ACTIVITY" },
+            { match: k => k.startsWith("STREAM"), type: "STREAM" },
+            { match: k => k.includes("VIDEO"), type: "WATCH_VIDEO" },
+            { match: k => k.startsWith("PLAY"), type: "GAME" },
+            { match: k => k.includes("ACTIVITY"), type: "ACTIVITY" },
         ];
 
-        for (const { key, type } of typeMap) {
-            const keyName = taskKeys.find(k => k.includes(key));
+        for (const { match, type } of typeMap) {
+            const keyName = taskKeys.find(match);
             if (keyName) {
                 const appId = cfg.tasks[keyName]?.applications?.[0]?.id ?? applicationId ?? null;
                 return { type, keyName, target: cfg.tasks[keyName]?.target ?? 0, appId };
             }
         }
-
+        
         if (applicationId) {
-            const keyName = taskKeys[0];
-            return { type: "GAME", keyName, target: cfg.tasks[keyName]?.target ?? 0, appId: applicationId };
+            return {
+                type: "GAME", keyName: "PLAY_ON_DESKTOP",
+                target: cfg.tasks[taskKeys[0]]?.target ?? 0,
+                appId: applicationId,
+            };
         }
-
         return null;
     },
 
@@ -137,9 +159,11 @@ export const Tasks = {
     },
 
     async claimReward(questId) {
+        let trafficSealed = null;
+        try { trafficSealed = Mods.QuestStore?.getQuest?.(questId)?.trafficMetadataSealed ?? null; } catch { }
         return await Mods.API.post({
             url: `/quests/${questId}/claim-reward`,
-            body: { platform: 0, location: 11, is_targeted: false, metadata_raw: null, metadata_sealed: null, traffic_metadata_raw: null, traffic_metadata_sealed: null }
+            body: { platform: 0, location: 11, is_targeted: false, metadata_sealed: null, traffic_metadata_sealed: trafficSealed }
         });
     },
 
@@ -322,17 +346,8 @@ export const Tasks = {
         const startTime = Date.now();
         let calls = 0;
 
-        if (cur === 0) {
-            await sleep(rnd(200, 350));
-            cur = 0.2 + (Math.random() * 0.05);
-            try {
-                await Traffic.enqueue(`/quests/${q.id}/video-progress`, { timestamp: Number(cur.toFixed(6)) });
-                calls++;
-            } catch (e) { Logger.log(`[Video] Initial ping failed: ${e.message}`, 'debug'); }
-        }
-
         while (cur < t.target && RUNTIME.running) {
-            const delayMs = rnd(3500, 4750);
+            const delayMs = rnd(7000, 9500);
             await sleep(delayMs);
 
             const elapsedSec = (delayMs / 1000) + (Math.random() * 0.02 - 0.01);
@@ -449,27 +464,34 @@ export const Tasks = {
         const initialProg = Tasks.readProgress(s, t.keyName) || Tasks.readProgress(s, 'ACHIEVEMENT_IN_ACTIVITY');
         Logger.updateTask(q.id, { name: t.name, type: "ACHIEVEMENT", cur: initialProg, max: t.target, status: "RUNNING" });
 
-        let chan = null;
-        try {
-            chan = Mods.ChanStore?.getSortedPrivateChannels()?.[0]?.id
-                ?? Object.values(Mods.GuildChanStore?.getAllGuilds() ?? {}).find(g => g?.VOCAL?.length)?.VOCAL?.[0]?.channel?.id;
-        } catch (e) { Logger.log(`[Achievement] Channel lookup: ${e.message}`, 'debug'); }
+        const key = this._streamKey();
 
-        if (chan) {
+        if (key) {
             Logger.log(`[Task] Attempting heartbeat spoofing for "${t.name}"...`, 'info');
-            const key = `call:${chan}:${rnd(1000, 9999)}`;
+            const beat = { stream_key: key, application_id: String(t.appId || ""), terminal: false };
             let cur = initialProg;
             let failCount = 0;
+            let stalledBeats = 0;
 
             while (cur < t.target && RUNTIME.running) {
                 try {
-                    const r = await Traffic.enqueue(`/quests/${q.id}/heartbeat`, { stream_key: key, terminal: false });
-                    cur = r?.body?.progress?.[t.keyName]?.value ?? r?.body?.progress?.ACHIEVEMENT_IN_ACTIVITY?.value ?? cur;
+                    const r = await Traffic.enqueue(`/quests/${q.id}/heartbeat`, beat);
+                    const reported = r?.body?.progress?.[t.keyName]?.value ?? r?.body?.progress?.ACHIEVEMENT_IN_ACTIVITY?.value;
+                    if (reported !== undefined && reported > cur) {
+                        cur = reported;
+                        stalledBeats = 0;
+                    } else if (reported !== undefined) {
+                        stalledBeats++;
+                        if (stalledBeats >= 5) {
+                            Logger.log(`[Achievement] Discord credited no progress after 5 beats. Falling back to bypass mode.`, 'warn');
+                            break;
+                        }
+                    }
                     Logger.updateTask(q.id, { name: t.name, type: "ACHIEVEMENT", cur, max: t.target, status: "RUNNING" });
                     failCount = 0;
 
                     if (cur >= t.target) {
-                        try { await Traffic.enqueue(`/quests/${q.id}/heartbeat`, { stream_key: key, terminal: true }); }
+                        try { await Traffic.enqueue(`/quests/${q.id}/heartbeat`, { ...beat, terminal: true }); }
                         catch (_) { }
                         break;
                     }
@@ -501,33 +523,37 @@ export const Tasks = {
     },
 
     async ACTIVITY(q, t, s) {
-        let chan = null;
-        try {
-            chan = Mods.ChanStore?.getSortedPrivateChannels()?.[0]?.id
-                ?? Object.values(Mods.GuildChanStore?.getAllGuilds() ?? {}).find(g => g?.VOCAL?.length)?.VOCAL?.[0]?.channel?.id;
-        } catch (e) {
-            Logger.log(`[Task] ACTIVITY channel lookup error: ${e.message}`, 'debug');
-        }
-
-        if (!chan) {
+        const key = this._streamKey();
+        if (!key) {
             return Tasks.failTask(q, t, 'No voice channel found');
         }
 
-        const key = `call:${chan}:${rnd(1000, 9999)}`;
+        const beat = { stream_key: key, application_id: String(t.appId || ""), terminal: false };
         let cur = Tasks.readProgress(s, t.keyName) || Tasks.readProgress(s, 'PLAY_ACTIVITY');
         let failCount = 0;
+        let stalledBeats = 0;
         Logger.updateTask(q.id, { name: t.name, type: "ACTIVITY", cur, max: t.target, status: "RUNNING" });
 
         const startTime = Date.now();
 
         while (cur < t.target && RUNTIME.running) {
             try {
-                const r = await Traffic.enqueue(`/quests/${q.id}/heartbeat`, { stream_key: key, terminal: false });
-                cur = r?.body?.progress?.[t.keyName]?.value ?? r?.body?.progress?.PLAY_ACTIVITY?.value ?? cur + 20;
+                const r = await Traffic.enqueue(`/quests/${q.id}/heartbeat`, beat);
+                const reported = r?.body?.progress?.[t.keyName]?.value ?? r?.body?.progress?.PLAY_ACTIVITY?.value;
+                if (reported !== undefined && reported > cur) {
+                    cur = reported;
+                    stalledBeats = 0;
+                } else if (reported !== undefined) {
+                    stalledBeats++;
+                    if (stalledBeats >= 5) {
+                        Logger.log(`[ACTIVITY] Discord credited no progress after 5 beats. Aborting.`, 'warn');
+                        return Tasks.failTask(q, t, 'Discord credited no progress');
+                    }
+                }
                 Logger.updateTask(q.id, { name: t.name, type: "ACTIVITY", cur, max: t.target, status: "RUNNING" });
                 failCount = 0;
                 if (cur >= t.target) {
-                    try { await Traffic.enqueue(`/quests/${q.id}/heartbeat`, { stream_key: key, terminal: true }); }
+                    try { await Traffic.enqueue(`/quests/${q.id}/heartbeat`, { ...beat, terminal: true }); }
                     catch (e) { Logger.log(`[ACTIVITY] Final heartbeat failed: ${e?.message}`, 'debug'); }
                     break;
                 }

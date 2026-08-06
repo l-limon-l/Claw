@@ -138,6 +138,7 @@ export function loadModules(options = {}) {
                 QuestStore: W.findStore('QuestStore') || W.findStore('QuestsStore'),
                 RunStore: W.findStore('RunningGameStore'),
                 StreamStore: W.findStore('ApplicationStreamingStore'),
+                UserStore: W.findStore('UserStore'),
                 ChanStore: W.findStore('ChannelStore'),
                 GuildChanStore: W.findStore('GuildChannelStore'),
                 Dispatcher: W.Common?.FluxDispatcher || W.findByProps('dispatch', 'subscribe', 'flushWaitQueue'),
@@ -149,7 +150,7 @@ export function loadModules(options = {}) {
             const missing = required.filter(k => !Mods[k]);
 
             if (missing.length === 0) {
-                const optional = ['StreamStore', 'ChanStore', 'GuildChanStore', 'Router'];
+                const optional = ['StreamStore', 'UserStore', 'ChanStore', 'GuildChanStore', 'Router'];
                 optional.forEach(k => { if (!quiet && !Mods[k]) Logger.log(`[System] Optional module '${k}' not found. Features may be limited.`, 'warn'); });
                 Patcher.init(Mods.RunStore);
                 return true;
@@ -242,6 +243,7 @@ export function loadModules(options = {}) {
             QuestStore: findStore('QuestStore'),
             RunStore: findStore('RunningGameStore'),
             StreamStore: findStore('ApplicationStreamingStore'),
+            UserStore: findStore('UserStore'),
             ChanStore: findStore('ChannelStore'),
             GuildChanStore: findStore('GuildChannelStore'),
             Dispatcher: findDispatcher(),

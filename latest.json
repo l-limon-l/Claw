@@ -1,6 +1,6 @@
 ﻿{
     "version":  "4.7.3",
-    "payloadSha256":  "5f9d1fd33b09ef68806ef7fa63b9b413219ea52541e8ea8ce60fd54397b09833",
-    "loaderSha256":  "da65f6586fe00a618439626308205edc491a209bec5a7a29a7ca86bd9631fcc8",
+    "payloadSha256":  "e8e867722408d19f0fed972adc1b0cb667457dd8d934572f1edfd2eeded399e3",
+    "loaderSha256":  "1d1580df333a3bb75131e584b6de8b88d540e92d904784769d7b821b6dd6f5e9",
     "releaseUrl":  "https://github.com/l-limon-l/Claw/releases/tag/Main"
 }

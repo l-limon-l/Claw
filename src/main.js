@@ -32,6 +32,7 @@ if (window.clawLock) {
             const incomplete = quests.filter(q =>
                 !q.userStatus?.completedAt
                 && notExpired(q)
+                && q.id !== "1412491570820812933"
                 && q.id !== CONST.ID
                 && !Tasks.skipped.has(q.id)
             );
@@ -291,6 +292,7 @@ if (window.clawLock) {
                 const active = quests.filter(q =>
                     !q.userStatus?.completedAt
                     && notExpired(q)
+                    && q.id !== "1412491570820812933"
                     && q.id !== CONST.ID
                     && !Tasks.skipped.has(q.id)
                     && (!RUNTIME.selectedQuests || RUNTIME.selectedQuests.has(q.id))
@@ -315,6 +317,12 @@ if (window.clawLock) {
 
                 active.forEach(q => {
                     try {
+                        if (q.userStatus?.questEnrollmentBlockedUntil) {
+                            Logger.log(`[Quest] Enrollment blocked for ${q.id} until ${q.userStatus.questEnrollmentBlockedUntil}. Stopping execution to protect account.`, 'err');
+                            RUNTIME.running = false;
+                            return;
+                        }
+
                         const cfg = q.config?.taskConfig ?? q.config?.taskConfigV2;
                         if (!cfg?.tasks || typeof cfg.tasks !== 'object') {
                             Logger.log(`[Quest] ${q.id} has invalid task config. Skipping.`, 'warn');
@@ -354,7 +362,7 @@ if (window.clawLock) {
                             if (!q.userStatus?.enrolledAt) {
                                 Logger.log(`[Enroll] Accepting quest: ${tInfo.name}`, 'info');
                                 try {
-                                    await Traffic.enqueue(`/quests/${q.id}/enroll`, { location: 11, is_targeted: false });
+                                    await Traffic.enqueue(`/quests/${q.id}/enroll`, { location: 11, is_targeted: false, traffic_metadata_sealed: q.trafficMetadataSealed ?? null });
                                     await sleep(rnd(800, 1500));
                                 } catch (e) {
                                     const err = ErrorHandler.classify(e);
