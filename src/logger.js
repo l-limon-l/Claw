@@ -59,23 +59,23 @@ export const Logger = {
                 overflow: hidden; animation: slideIn 0.55s cubic-bezier(0.16, 1, 0.3, 1); display: flex; flex-direction: column;
             }
             #claw-ui.claw-light {
-                --bg-base: #f8fafc;
-                --bg-panel: rgba(255, 255, 255, 0.4);
+                --bg-base: #f2f3f5;
+                --bg-panel: rgba(255, 255, 255, 0.85);
                 backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
                 --bg-surface: rgba(0, 0, 0, 0.03);
                 --bg-surface-hover: rgba(0, 0, 0, 0.06);
-                --bg-elevated: rgba(255, 255, 255, 0.95);
-                --text-primary: #0f172a;
-                --text-secondary: #334155;
-                --text-tertiary: #64748b;
-                --text-quaternary: #94a3b8;
-                --border-subtle: rgba(0, 0, 0, 0.06);
-                --border-standard: rgba(0, 0, 0, 0.1);
+                --bg-elevated: rgba(255, 255, 255, 0.9);
+                --text-primary: #060607;
+                --text-secondary: #2e3338;
+                --text-tertiary: #4f5660;
+                --text-quaternary: #72767d;
+                --border-subtle: rgba(0, 0, 0, 0.08);
+                --border-standard: rgba(0, 0, 0, 0.12);
                 --accent: #4f46e5;
-                --accent-bright: #6366f1;
+                --accent-bright: #4f46e5;
                 --accent-hover: #4338ca;
-                --shadow-panel: 0 0 0 1px rgba(0,0,0,0.05), 0 32px 84px rgba(0,0,0,0.1), 0 12px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1);
-                --shadow-card: 0 0 0 1px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.05);
+                --shadow-panel: 0 0 0 1px rgba(0,0,0,0.08), 0 32px 84px rgba(0,0,0,0.12), 0 12px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.8);
+                --shadow-card: 0 0 0 1px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.06);
                 --toggle-bg: rgba(0, 0, 0, 0.15);
                 --toggle-knob: #ffffff;
             }
@@ -358,36 +358,93 @@ export const Logger = {
             #claw-ui.claw-light {
                 --bg-base: #f2f3f5;
                 --bg-panel: rgba(255, 255, 255, 0.85);
+                
                 --bg-surface: rgba(0, 0, 0, 0.03);
                 --bg-surface-hover: rgba(0, 0, 0, 0.06);
                 --bg-elevated: rgba(255, 255, 255, 0.9);
                 --text-primary: #060607;
                 --text-secondary: #2e3338;
-                --text-tertiary: #6d6f78;
-                --text-quaternary: #8a8c94;
-                --border-subtle: rgba(0, 0, 0, 0.06);
-                --border-standard: rgba(0, 0, 0, 0.1);
+                --text-tertiary: #4f5660;
+                --text-quaternary: #72767d;
+                --border-subtle: rgba(0, 0, 0, 0.08);
+                --border-standard: rgba(0, 0, 0, 0.12);
+                --accent: #4f46e5;
+                --accent-bright: #4f46e5;
+                --accent-hover: #4338ca;
+                --success: #059669;
+                --success-bright: #059669;
+                --warn: #d97706;
+                --warn-bright: #d97706;
+                --danger: #dc2626;
+                --danger-bright: #dc2626;
                 --shadow-panel: 0 0 0 1px rgba(0,0,0,0.08), 0 32px 84px rgba(0,0,0,0.12), 0 12px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.8);
                 --shadow-card: 0 0 0 1px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.06);
+                --toggle-bg: rgba(0, 0, 0, 0.15);
+                --toggle-knob: #ffffff;
             }
-            #claw-ui.claw-light .task-card { background: rgba(0,0,0,0.02); }
-            #claw-ui.claw-light .task-card:hover { background: rgba(0,0,0,0.04); }
-            #claw-ui.claw-light .task-card.active { background: rgba(99,102,241,0.06); }
-            #claw-ui.claw-light .task-card.done { background: rgba(16,185,129,0.06); }
-            #claw-ui.claw-light .task-card.failed { background: rgba(239,68,68,0.06); }
-            #claw-ui.claw-light .task-card.pending { background: rgba(245,158,11,0.06); }
-            #claw-ui.claw-light .ctrl-btn { background: rgba(0,0,0,0.03); box-shadow: 0 0 0 1px rgba(0,0,0,0.1); }
-            #claw-ui.claw-light .ctrl-btn:hover { background: rgba(0,0,0,0.06); }
-            #claw-ui.claw-light .ctrl-stop { box-shadow: 0 0 0 1px rgba(239,68,68,0.3); }
-            #claw-ui.claw-light .ctrl-stop:hover { background: rgba(239,68,68,0.08); }
-            #claw-ui.claw-light #claw-logs-wrap { background: rgba(0,0,0,0.02); }
-            #claw-ui.claw-light .progress-track { background: rgba(0,0,0,0.08); border-color: rgba(0,0,0,0.06); }
-            #claw-ui.claw-light .quest-pick-btn.toggle { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); }
-            #claw-ui.claw-light .dev-badge { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.08); }
-            #claw-ui.claw-light #claw-footer { background: rgba(0,0,0,0.02); }
+            /* header */
+            #claw-ui.claw-light #claw-head { background: linear-gradient(180deg, rgba(0,0,0,0.01) 0%, transparent 100%); }
+            #claw-ui.claw-light #claw-title { text-shadow: none; }
+            /* control buttons */
+            #claw-ui.claw-light .ctrl-btn { background: rgba(0,0,0,0.04); box-shadow: 0 0 0 1px rgba(0,0,0,0.12); color: var(--text-secondary); }
+            #claw-ui.claw-light .ctrl-btn:hover { background: rgba(0,0,0,0.08); }
+            #claw-ui.claw-light .ctrl-stop { color: #dc2626; box-shadow: 0 0 0 1px rgba(220,38,38,0.35); }
+            #claw-ui.claw-light .ctrl-stop:hover { background: rgba(220,38,38,0.08); }
+            #claw-ui.claw-light .ctrl-hide kbd { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.1); color: var(--text-quaternary); }
+            /* summary cards */
             #claw-ui.claw-light .summary-item { background: rgba(0,0,0,0.03); }
-            #claw-ui.claw-light .summary-item:hover { background: rgba(0,0,0,0.06); }
-            #claw-ui.claw-light .claw-empty { background: radial-gradient(ellipse at top right, rgba(113,112,255,0.04), transparent 50%), rgba(255,255,255,0.6); }
+            #claw-ui.claw-light .summary-item:hover { background: rgba(0,0,0,0.06); box-shadow: 0 0 0 1px rgba(0,0,0,0.08), 0 8px 20px rgba(0,0,0,0.08); }
+            #claw-ui.claw-light .summary-value { text-shadow: none; }
+            #claw-ui.claw-light .summary-item.running .summary-value { color: #4f46e5; text-shadow: none; }
+            #claw-ui.claw-light .summary-item.queued .summary-value { color: #d97706; text-shadow: none; }
+            #claw-ui.claw-light .summary-item.done .summary-value { color: #059669; text-shadow: none; }
+            #claw-ui.claw-light .summary-item.failed .summary-value { color: #dc2626; text-shadow: none; }
+            /* task cards */
+            #claw-ui.claw-light .task-card { background: rgba(0,0,0,0.02); }
+            #claw-ui.claw-light .task-card:hover { background: rgba(0,0,0,0.04); box-shadow: 0 0 0 1px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.08); }
+            #claw-ui.claw-light .task-card.active { background: rgba(79,70,229,0.06); box-shadow: 0 0 0 1px rgba(79,70,229,0.3), 0 4px 12px rgba(79,70,229,0.08); }
+            #claw-ui.claw-light .task-card.done { background: rgba(5,150,105,0.06); box-shadow: 0 0 0 1px rgba(5,150,105,0.25); }
+            #claw-ui.claw-light .task-card.failed { background: rgba(220,38,38,0.05); box-shadow: 0 0 0 1px rgba(220,38,38,0.2); }
+            #claw-ui.claw-light .task-card.pending { background: rgba(217,119,6,0.05); box-shadow: 0 0 0 1px rgba(217,119,6,0.2); }
+            /* status badges */
+            #claw-ui.claw-light .task-status { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.08); color: var(--text-tertiary); }
+            #claw-ui.claw-light .task-card.active .task-status { color: #4338ca; background: rgba(79,70,229,0.1); border-color: rgba(79,70,229,0.2); }
+            #claw-ui.claw-light .task-card.done .task-status { color: #047857; background: rgba(5,150,105,0.1); border-color: rgba(5,150,105,0.2); }
+            #claw-ui.claw-light .task-card.failed .task-status { color: #b91c1c; background: rgba(220,38,38,0.1); border-color: rgba(220,38,38,0.2); }
+            #claw-ui.claw-light .task-card.pending .task-status { color: #92400e; background: rgba(217,119,6,0.1); border-color: rgba(217,119,6,0.2); }
+            /* progress bar */
+            #claw-ui.claw-light .progress-track { background: rgba(0,0,0,0.08); box-shadow: inset 0 1px 2px rgba(0,0,0,0.1); border-color: rgba(0,0,0,0.06); }
+            #claw-ui.claw-light .progress-fill { box-shadow: 0 0 8px rgba(79,70,229,0.3); }
+            #claw-ui.claw-light .task-card.done .progress-fill { box-shadow: 0 0 8px rgba(5,150,105,0.3); }
+            /* claim / action buttons */
+            #claw-ui.claw-light .claim-btn { background: rgba(5,150,105,0.12); color: #047857; box-shadow: 0 0 0 1px rgba(5,150,105,0.3); }
+            #claw-ui.claw-light .claim-btn:hover:not(:disabled) { background: rgba(5,150,105,0.2); }
+            #claw-ui.claw-light .claim-btn.failed { background: rgba(220,38,38,0.1); color: #b91c1c; box-shadow: 0 0 0 1px rgba(220,38,38,0.25); }
+            #claw-ui.claw-light .goto-btn { background: rgba(79,70,229,0.1); color: #4338ca; box-shadow: 0 0 0 1px rgba(79,70,229,0.2); }
+            #claw-ui.claw-light .goto-btn:hover { background: rgba(79,70,229,0.18); }
+            /* logs area */
+            #claw-ui.claw-light #claw-logs-wrap { background: rgba(0,0,0,0.02); }
+            #claw-ui.claw-light #claw-logs-head { border-bottom-color: rgba(0,0,0,0.04); }
+            #claw-ui.claw-light #claw-logs-head:hover { background: rgba(0,0,0,0.03); }
+            #claw-ui.claw-light .log-item { border-bottom-color: rgba(0,0,0,0.04); }
+            #claw-ui.claw-light .c-info .log-text { color: #4338ca; }
+            #claw-ui.claw-light .c-success .log-text { color: #047857; }
+            #claw-ui.claw-light .c-err .log-text { color: #b91c1c; }
+            #claw-ui.claw-light .c-warn .log-text { color: #92400e; }
+            #claw-ui.claw-light .c-debug .log-text { color: #9ca3af; }
+            /* scrollbar */
+            #claw-ui.claw-light ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); }
+            #claw-ui.claw-light ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.18); }
+            /* footer */
+            #claw-ui.claw-light #claw-footer { background: rgba(0,0,0,0.02); border-top-color: rgba(0,0,0,0.06); }
+            #claw-ui.claw-light .dev-badge { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.08); }
+            #claw-ui.claw-light .dev-badge strong { color: var(--text-primary); }
+            /* picker buttons */
+            #claw-ui.claw-light .quest-pick-btn.toggle { background: rgba(0,0,0,0.04); color: var(--text-secondary); border-color: rgba(0,0,0,0.12); }
+            #claw-ui.claw-light .quest-pick-btn.toggle:hover { background: rgba(0,0,0,0.08); border-color: rgba(0,0,0,0.18); }
+            #claw-ui.claw-light .reward-filter:not(.off) { background: rgba(0,0,0,0.04); }
+            /* empty state */
+            #claw-ui.claw-light .claw-empty { background: radial-gradient(ellipse at top right, rgba(79,70,229,0.04), transparent 50%), rgba(255,255,255,0.6); box-shadow: 0 0 0 1px rgba(0,0,0,0.05); }
         `;
         document.head.appendChild(style);
 
