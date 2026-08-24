@@ -802,7 +802,7 @@ export const Logger = {
 
             if (t.claimable) {
                 if (t.claimState === 'WAITING') actionBtn = `<button class="claim-btn" disabled>WAITING...</button>`;
-                else if (t.claimState === 'FAILED') actionBtn = `<button class="claim-btn failed" disabled>ACTION REQUIRED</button>`;
+                else if (t.claimState === 'FAILED') actionBtn = `<button class="claim-btn failed" data-id="${id}" type="button">RETRY CLAIM</button>`;
                 else actionBtn = `<button class="claim-btn" data-id="${id}" type="button">CLAIM REWARD</button>`;
             } else if (t.actionRequired === 'ENROLL') {
                 statusText = 'ACTION REQUIRED';
