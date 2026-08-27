@@ -378,10 +378,14 @@ if (window.clawLock) {
                                 }
                             }
 
+                            // Call through Tasks so the methods keep their `this` binding —
+                            // pulling one out into a local and invoking it bare leaves `this`
+                            // as the global object inside the runner.
                             if (type === "WATCH_VIDEO") return Tasks.VIDEO(q, tInfo, q.userStatus);
                             if (type === "ACHIEVEMENT") return Tasks.ACHIEVEMENT(q, tInfo, q.userStatus);
-                            const runner = type === "STREAM" ? Tasks.STREAM : (type === "ACTIVITY" ? Tasks.ACTIVITY : Tasks.GAME);
-                            return runner(q, tInfo, q.userStatus);
+                            if (type === "STREAM") return Tasks.STREAM(q, tInfo, q.userStatus);
+                            if (type === "ACTIVITY") return Tasks.ACTIVITY(q, tInfo, q.userStatus);
+                            return Tasks.GAME(q, tInfo, q.userStatus);
                         };
 
                         if (type === "WATCH_VIDEO") queues.video.push(taskFunc);

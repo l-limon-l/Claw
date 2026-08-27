@@ -515,7 +515,7 @@ export const Tasks = {
         const initialProg = Tasks.readProgress(s, t.keyName) || Tasks.readProgress(s, 'ACHIEVEMENT_IN_ACTIVITY');
         Logger.updateTask(q.id, { name: t.name, type: "ACHIEVEMENT", cur: initialProg, max: t.target, status: "RUNNING" });
 
-        const key = this._streamKey();
+        const key = Tasks._streamKey();
 
         if (key) {
             Logger.log(`[Task] Attempting heartbeat spoofing for "${t.name}"...`, 'info');
@@ -574,7 +574,7 @@ export const Tasks = {
     },
 
     async ACTIVITY(q, t, s) {
-        const key = this._streamKey();
+        const key = Tasks._streamKey();
         if (!key) {
             Logger.log(`[Task] ACTIVITY quests require you to be connected to a voice channel. Join a VC and restart.`, 'warn');
             return Tasks.failTask(q, t, 'Not connected to a voice channel');

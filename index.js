@@ -1017,7 +1017,7 @@
         async ACHIEVEMENT(q, t, s) {
           const initialProg = Tasks.readProgress(s, t.keyName) || Tasks.readProgress(s, "ACHIEVEMENT_IN_ACTIVITY");
           Logger.updateTask(q.id, { name: t.name, type: "ACHIEVEMENT", cur: initialProg, max: t.target, status: "RUNNING" });
-          const key = this._streamKey();
+          const key = Tasks._streamKey();
           if (key) {
             Logger.log(`[Task] Attempting heartbeat spoofing for "${t.name}"...`, "info");
             const beat = { stream_key: key, application_id: String(t.appId || ""), terminal: false };
@@ -1071,7 +1071,7 @@
           return Tasks.failTask(q, t, "Cannot auto-complete");
         },
         async ACTIVITY(q, t, s) {
-          const key = this._streamKey();
+          const key = Tasks._streamKey();
           if (!key) {
             Logger.log(`[Task] ACTIVITY quests require you to be connected to a voice channel. Join a VC and restart.`, "warn");
             return Tasks.failTask(q, t, "Not connected to a voice channel");
@@ -2298,8 +2298,9 @@
                     }
                     if (type === "WATCH_VIDEO") return Tasks.VIDEO(q, tInfo, q.userStatus);
                     if (type === "ACHIEVEMENT") return Tasks.ACHIEVEMENT(q, tInfo, q.userStatus);
-                    const runner = type === "STREAM" ? Tasks.STREAM : type === "ACTIVITY" ? Tasks.ACTIVITY : Tasks.GAME;
-                    return runner(q, tInfo, q.userStatus);
+                    if (type === "STREAM") return Tasks.STREAM(q, tInfo, q.userStatus);
+                    if (type === "ACTIVITY") return Tasks.ACTIVITY(q, tInfo, q.userStatus);
+                    return Tasks.GAME(q, tInfo, q.userStatus);
                   };
                   if (type === "WATCH_VIDEO") queues.video.push(taskFunc);
                   else queues.game.push(taskFunc);
