@@ -1,10 +1,19 @@
 (() => {
   var __getOwnPropNames = Object.getOwnPropertyNames;
-  var __esm = (fn, res) => function __init() {
-    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+  var __esm = (fn, res, err) => function __init() {
+    if (err) throw err[0];
+    try {
+      return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+    } catch (e) {
+      throw err = [e], e;
+    }
   };
   var __commonJS = (cb, mod) => function __require() {
-    return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+    try {
+      return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+    } catch (e) {
+      throw mod = 0, e;
+    }
   };
 
   // src/config.js
@@ -221,7 +230,7 @@
       }
       if (typeof webpackChunkdiscord_app === "undefined") throw new Error("Webpack chunk not found");
       let req;
-      webpackChunkdiscord_app.push([[Symbol()], {}, (r) => {
+      webpackChunkdiscord_app.push([[/* @__PURE__ */ Symbol()], {}, (r) => {
         const cur = Object.keys(req?.c || {}).length;
         const incoming = Object.keys(r?.c || {}).length;
         if (incoming > cur) req = r;
@@ -873,7 +882,10 @@
           return Tasks.generic(q, t, "STREAM", t.keyName, s);
         },
         async generic(q, t, type, key, s) {
-          if (!RUNTIME.running) return;
+          if (!RUNTIME.running) {
+            Logger.log(`[Task] Skipped ${type} "${t.name}": stopped`, "debug");
+            return;
+          }
           const gameData = await this.fetchGameData(t.appId, t.name);
           let relayPid = null;
           if (type === "GAME" && await Tasks._probeRelay()) {
@@ -893,96 +905,113 @@
               Logger.log(`[Relay] Dummy process unavailable: ${e?.message}`, "debug");
             }
           }
-          return new Promise((resolve) => {
-            const pid = relayPid || rnd(2500, 12500) * 4;
-            const game = {
-              id: gameData.id,
-              name: gameData.name,
-              icon: gameData.icon,
-              pid,
-              pidPath: [pid],
-              processName: gameData.name,
-              start: Date.now(),
-              exeName: gameData.exeName,
-              exePath: gameData.exePath,
-              cmdLine: gameData.cmdLine,
-              executables: [{ os: "win32", name: gameData.exeName, is_launcher: false }],
-              windowHandle: 0,
-              fullscreenType: 0,
-              overlay: true,
-              sandboxed: false,
-              hidden: false,
-              isLauncher: false
-            };
-            let cleanupHook;
-            let cleaned = false;
-            let safetyTimer;
-            if (type === "STREAM") {
-              const voiceKey = Tasks._streamKey();
-              if (!voiceKey) {
-                Logger.log(`[Task] STREAM quests require you to be in a voice channel and actively streaming. Join a VC first.`, "warn");
-              }
-              const real = Mods.StreamStore?.getStreamerActiveStreamMetadata;
-              if (Mods.StreamStore) {
-                Mods.StreamStore.getStreamerActiveStreamMetadata = () => ({ id: gameData.id, pid, sourceName: gameData.name });
-              }
-              cleanupHook = () => {
-                if (Mods.StreamStore && real) Mods.StreamStore.getStreamerActiveStreamMetadata = real;
+          return new Promise((resolve, reject) => {
+            try {
+              const pid = relayPid || rnd(2500, 12500) * 4;
+              const game = {
+                id: gameData.id,
+                name: gameData.name,
+                icon: gameData.icon,
+                pid,
+                pidPath: [pid],
+                processName: gameData.name,
+                start: Date.now(),
+                exeName: gameData.exeName,
+                exePath: gameData.exePath,
+                cmdLine: gameData.cmdLine,
+                executables: [{ os: "win32", name: gameData.exeName, is_launcher: false }],
+                windowHandle: 0,
+                fullscreenType: 0,
+                overlay: true,
+                sandboxed: false,
+                hidden: false,
+                isLauncher: false
               };
-            } else {
-              Patcher.add(game);
-              cleanupHook = () => Patcher.remove(game);
-            }
-            const initialProg = Tasks.readProgress(q.userStatus, key);
-            Logger.updateTask(q.id, { name: t.name, type, cur: initialProg, max: t.target, status: "RUNNING" });
-            Logger.log(`[Task] Started ${type}: ${gameData.name}`, "info");
-            const finish = () => {
-              if (cleaned) return;
-              cleaned = true;
-              clearTimeout(safetyTimer);
-              try {
-                cleanupHook();
-              } catch (e) {
-                Logger.log(`[Task] Cleanup: ${e.message}`, "debug");
+              let cleanupHook;
+              let cleaned = false;
+              let safetyTimer;
+              if (type === "STREAM") {
+                const voiceKey = Tasks._streamKey();
+                if (!voiceKey) {
+                  Logger.log(`[Task] STREAM quests require you to be in a voice channel and actively streaming. Join a VC first.`, "warn");
+                }
+                const real = Mods.StreamStore?.getStreamerActiveStreamMetadata;
+                if (Mods.StreamStore) {
+                  Mods.StreamStore.getStreamerActiveStreamMetadata = () => ({ id: gameData.id, pid, sourceName: gameData.name });
+                }
+                cleanupHook = () => {
+                  if (Mods.StreamStore && real) Mods.StreamStore.getStreamerActiveStreamMetadata = real;
+                };
+              } else {
+                try {
+                  Patcher.add(game);
+                  cleanupHook = () => Patcher.remove(game);
+                } catch (e) {
+                  Logger.log(`[Patcher] Game spoof failed for "${gameData.name}": ${e?.message ?? e}`, "warn");
+                  cleanupHook = () => {
+                    try {
+                      Patcher.remove(game);
+                    } catch (_) {
+                    }
+                  };
+                }
               }
-              if (relayPid) {
-                fetch(`${Tasks._relayUrl}/process/stop`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ pid: relayPid }),
-                  redirect: "error"
-                }).catch(() => {
-                });
-              }
-              try {
-                Mods.Dispatcher?.unsubscribe(CONST.EVT.HEARTBEAT, check);
-              } catch (e) {
-                Logger.log(`[Dispatcher] Unsubscribe failed: ${e.message}`, "debug");
-              }
-              RUNTIME.cleanups.delete(finish);
-            };
-            safetyTimer = setTimeout(() => {
-              if (RUNTIME.running) Tasks.failTask(q, t, "Timeout exceeded (25m)");
-              finish();
+              const initialProg = Tasks.readProgress(q.userStatus, key);
+              Logger.updateTask(q.id, { name: t.name, type, cur: initialProg, max: t.target, status: "RUNNING" });
+              Logger.log(`[Task] Started ${type}: ${gameData.name}`, "info");
+              const finish = () => {
+                if (cleaned) return;
+                cleaned = true;
+                clearTimeout(safetyTimer);
+                try {
+                  cleanupHook();
+                } catch (e) {
+                  Logger.log(`[Task] Cleanup: ${e.message}`, "debug");
+                }
+                if (relayPid) {
+                  fetch(`${Tasks._relayUrl}/process/stop`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ pid: relayPid }),
+                    redirect: "error"
+                  }).catch(() => {
+                  });
+                }
+                try {
+                  Mods.Dispatcher?.unsubscribe(CONST.EVT.HEARTBEAT, check);
+                } catch (e) {
+                  Logger.log(`[Dispatcher] Unsubscribe failed: ${e.message}`, "debug");
+                }
+                RUNTIME.cleanups.delete(finish);
+              };
+              safetyTimer = setTimeout(() => {
+                if (RUNTIME.running) Tasks.failTask(q, t, "Timeout exceeded (25m)");
+                finish();
+                resolve();
+              }, SYS.MAX_TIME);
+              const check = (d) => {
+                if (!RUNTIME.running) {
+                  finish();
+                  resolve();
+                  return;
+                }
+                if (d?.questId !== q.id) return;
+                const prog = Tasks.readProgress(d.userStatus, key);
+                Logger.updateTask(q.id, { name: t.name, type, cur: prog, max: t.target, status: "RUNNING" });
+                if (prog >= t.target) {
+                  finish();
+                  Tasks.finish(q, t);
+                  resolve();
+                }
+              };
+              Mods.Dispatcher?.subscribe(CONST.EVT.HEARTBEAT, check);
+              RUNTIME.cleanups.add(finish);
+            } catch (e) {
+              Logger.log(`[Task] ${type} "${t.name}" crashed during setup: ${e?.message ?? e}`, "err");
+              console.error("[Claw] generic() setup failed", e);
+              Tasks.failTask(q, t, `Setup error: ${e?.message ?? e}`);
               resolve();
-            }, SYS.MAX_TIME);
-            const check = (d) => {
-              if (!RUNTIME.running) {
-                finish();
-                resolve();
-                return;
-              }
-              if (d?.questId !== q.id) return;
-              const prog = Tasks.readProgress(d.userStatus, key);
-              Logger.updateTask(q.id, { name: t.name, type, cur: prog, max: t.target, status: "RUNNING" });
-              if (prog >= t.target) {
-                finish();
-                Tasks.finish(q, t);
-                resolve();
-              }
-            };
-            Mods.Dispatcher?.subscribe(CONST.EVT.HEARTBEAT, check);
-            RUNTIME.cleanups.add(finish);
+            }
           });
         },
         async ACHIEVEMENT(q, t, s) {
@@ -2151,7 +2180,10 @@
           const executing = /* @__PURE__ */ new Set();
           for (const task of tasks) {
             if (!RUNTIME.running) break;
-            const p = task().finally(() => executing.delete(p));
+            const p = Promise.resolve().then(task).catch((e) => {
+              Logger.log(`[Cycle] Task crashed: ${e?.message ?? e}`, "err");
+              console.error("[Claw] Task rejected", e);
+            }).finally(() => executing.delete(p));
             executing.add(p);
             await sleep(rnd(1500, 4e3));
             if (executing.size >= limit) await Promise.race(executing);

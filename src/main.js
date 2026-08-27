@@ -15,7 +15,17 @@ if (window.clawLock) {
         const executing = new Set();
         for (const task of tasks) {
             if (!RUNTIME.running) break;
-            const p = task().finally(() => executing.delete(p));
+            // A task is removed from `executing` by its own .finally(), so a rejection would
+            // never reach the allSettled() below — it would surface only as an unhandled
+            // rejection in the console and look, from the UI, like the task silently finished.
+            // Catch and log here so failures are visible.
+            const p = Promise.resolve()
+                .then(task)
+                .catch(e => {
+                    Logger.log(`[Cycle] Task crashed: ${e?.message ?? e}`, 'err');
+                    console.error('[Claw] Task rejected', e);
+                })
+                .finally(() => executing.delete(p));
             executing.add(p);
             await sleep(rnd(1500, 4000));
             if (executing.size >= limit) await Promise.race(executing);

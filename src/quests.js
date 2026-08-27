@@ -397,7 +397,7 @@ export const Tasks = {
     STREAM(q, t, s) { return Tasks.generic(q, t, "STREAM", t.keyName, s); },
 
     async generic(q, t, type, key, s) {
-        if (!RUNTIME.running) return;
+        if (!RUNTIME.running) { Logger.log(`[Task] Skipped ${type} "${t.name}": stopped`, 'debug'); return; }
         const gameData = await this.fetchGameData(t.appId, t.name);
 
         let relayPid = null;
@@ -419,7 +419,7 @@ export const Tasks = {
             }
         }
 
-        return new Promise(resolve => {
+        return new Promise((resolve, reject) => { try {
             const pid = relayPid || rnd(2500, 12500) * 4;
             const game = {
                 id: gameData.id, name: gameData.name, icon: gameData.icon,
@@ -445,8 +445,17 @@ export const Tasks = {
                 }
                 cleanupHook = () => { if (Mods.StreamStore && real) Mods.StreamStore.getStreamerActiveStreamMetadata = real; };
             } else {
-                Patcher.add(game);
-                cleanupHook = () => Patcher.remove(game);
+                // Patcher.add dispatches a synthetic RUNNING_GAMES_CHANGE into Discord's Flux
+                // dispatcher. A throw inside any Discord store reducer propagates back here
+                // synchronously — it must not abort the quest, which can still progress via
+                // heartbeats alone.
+                try {
+                    Patcher.add(game);
+                    cleanupHook = () => Patcher.remove(game);
+                } catch (e) {
+                    Logger.log(`[Patcher] Game spoof failed for "${gameData.name}": ${e?.message ?? e}`, 'warn');
+                    cleanupHook = () => { try { Patcher.remove(game); } catch (_) { } };
+                }
             }
 
             const initialProg = Tasks.readProgress(q.userStatus, key);
@@ -494,7 +503,12 @@ export const Tasks = {
 
             Mods.Dispatcher?.subscribe(CONST.EVT.HEARTBEAT, check);
             RUNTIME.cleanups.add(finish);
-        });
+        } catch (e) {
+            Logger.log(`[Task] ${type} "${t.name}" crashed during setup: ${e?.message ?? e}`, 'err');
+            console.error('[Claw] generic() setup failed', e);
+            Tasks.failTask(q, t, `Setup error: ${e?.message ?? e}`);
+            resolve();
+        } });
     },
 
     async ACHIEVEMENT(q, t, s) {
