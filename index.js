@@ -1744,6 +1744,11 @@
           }
           RUNTIME.cleanups.clear();
           Patcher.clean();
+          try {
+            fetch("http://127.0.0.1:43210/shutdown", { method: "POST", redirect: "error" }).catch(() => {
+            });
+          } catch (_) {
+          }
           if (this._themeObserver) {
             this._themeObserver.disconnect();
             this._themeObserver = null;

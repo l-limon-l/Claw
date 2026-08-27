@@ -877,6 +877,12 @@ namespace ClawInjector
                     await HandleProxyAsync(ctx);
                     break;
 
+                case "/shutdown":
+                    WriteJson(ctx.Response, 200, "{\"ok\":true}");
+                    CleanupDummyProcesses();
+                    Environment.Exit(0);
+                    break;
+
                 default:
                     WriteJson(ctx.Response, 404, "{\"error\":\"not found\"}");
                     break;
