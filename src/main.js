@@ -87,10 +87,6 @@ if (window.clawLock) {
                             <span class="claw-option-label">Desktop notifications</span>
                             <label class="claw-toggle"><input type="checkbox" id="opt-notify"><span class="slider"></span></label>
                         </div>
-                        <div class="claw-option">
-                            <span class="claw-option-label">Anti-detection delay</span>
-                            <label class="claw-toggle"><input type="checkbox" id="opt-delay" checked><span class="slider"></span></label>
-                        </div>
                     </div>
                     <div class="quest-pick-actions">
                         <button class="quest-pick-btn toggle disabled" id="claw-toggle-all">DESELECT ALL</button>
@@ -218,7 +214,7 @@ if (window.clawLock) {
                     autoClaim: $('#opt-claim').checked,
                     playSound: $('#opt-sound').checked,
                     notify: $('#opt-notify').checked,
-                    randomDelay: $('#opt-delay').checked
+                    randomDelay: true
                 };
 
                 if (options.notify) {

@@ -141,6 +141,8 @@ export function loadModules(options = {}) {
                 UserStore: W.findStore('UserStore'),
                 ChanStore: W.findStore('ChannelStore'),
                 GuildChanStore: W.findStore('GuildChannelStore'),
+                VoiceStateStore: W.findStore('VoiceStateStore'),
+                SelectedChannelStore: W.findStore('SelectedChannelStore'),
                 Dispatcher: W.Common?.FluxDispatcher || W.findByProps('dispatch', 'subscribe', 'flushWaitQueue'),
                 API: W.Common?.RestAPI || W.findByProps('get', 'post', 'del'),
                 Router: routerModule
@@ -150,7 +152,7 @@ export function loadModules(options = {}) {
             const missing = required.filter(k => !Mods[k]);
 
             if (missing.length === 0) {
-                const optional = ['StreamStore', 'UserStore', 'ChanStore', 'GuildChanStore', 'Router'];
+                const optional = ['StreamStore', 'UserStore', 'ChanStore', 'GuildChanStore', 'VoiceStateStore', 'SelectedChannelStore', 'Router'];
                 optional.forEach(k => { if (!quiet && !Mods[k]) Logger.log(`[System] Optional module '${k}' not found. Features may be limited.`, 'warn'); });
                 Patcher.init(Mods.RunStore);
                 return true;
@@ -246,6 +248,8 @@ export function loadModules(options = {}) {
             UserStore: findStore('UserStore'),
             ChanStore: findStore('ChannelStore'),
             GuildChanStore: findStore('GuildChannelStore'),
+            VoiceStateStore: findStore('VoiceStateStore'),
+            SelectedChannelStore: findStore('SelectedChannelStore'),
             Dispatcher: findDispatcher(),
             API: findAPI(),
             Router: findRouter()
@@ -255,7 +259,7 @@ export function loadModules(options = {}) {
         const missing = required.filter(k => !Mods[k]);
         if (missing.length > 0) throw new Error(`Core modules not found: ${missing.join(', ')}`);
 
-        const optional = ['StreamStore', 'ChanStore', 'GuildChanStore', 'Router'];
+        const optional = ['StreamStore', 'ChanStore', 'GuildChanStore', 'VoiceStateStore', 'SelectedChannelStore', 'Router'];
         optional.forEach(k => { if (!quiet && !Mods[k]) Logger.log(`[System] Optional module '${k}' not found. Features may be limited.`, 'warn'); });
 
         Patcher.init(Mods.RunStore);

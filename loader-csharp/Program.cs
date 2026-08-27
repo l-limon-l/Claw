@@ -91,8 +91,8 @@ namespace ClawInjector
                     true);
                 PrintSubStep("Verified: " + DescribeVerification(verification));
 
-                PrintSuccess("Injection successful. Discord is running with Claw.");
-                AutoClose();
+                PrintSuccess("Injection successful. Starting relay server on 127.0.0.1:43210...");
+                await RunRelayServerAsync(43210);
                 return 0;
             }
             catch (Exception ex)
@@ -774,6 +774,290 @@ namespace ClawInjector
             Console.ForegroundColor = ConsoleColor.White;
             Console.WriteLine(message);
             Console.ResetColor();
+        }
+
+        private static readonly Dictionary<int, Process> DummyProcesses = new Dictionary<int, Process>();
+        private static readonly object ProcessLock = new object();
+
+        private static async Task RunRelayServerAsync(int port)
+        {
+            HttpListener listener = new HttpListener();
+            listener.Prefixes.Add(string.Format("http://127.0.0.1:{0}/", port));
+            try
+            {
+                listener.Start();
+            }
+            catch (HttpListenerException ex)
+            {
+                PrintError("Relay server failed to start: " + ex.Message);
+                PrintError("Try running as Administrator, or set CLAW_NO_RELAY=true to skip.");
+                Pause(true);
+                return;
+            }
+
+            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.WriteLine("Relay listening on 127.0.0.1:{0}. Press Ctrl+C to stop.", port);
+            Console.ResetColor();
+
+            Console.CancelKeyPress += (s, e) =>
+            {
+                e.Cancel = true;
+                CleanupDummyProcesses();
+                try { listener.Stop(); } catch { }
+            };
+
+            AppDomain.CurrentDomain.ProcessExit += (s, e) => CleanupDummyProcesses();
+
+            while (listener.IsListening)
+            {
+                HttpListenerContext ctx;
+                try
+                {
+                    ctx = await listener.GetContextAsync();
+                }
+                catch (ObjectDisposedException)
+                {
+                    break;
+                }
+                catch (HttpListenerException)
+                {
+                    break;
+                }
+
+                try
+                {
+                    await HandleRelayRequestAsync(ctx);
+                }
+                catch (Exception ex)
+                {
+                    try
+                    {
+                        byte[] errBytes = Encoding.UTF8.GetBytes("{\"error\":\"" + ex.Message.Replace("\"", "'") + "\"}");
+                        ctx.Response.StatusCode = 500;
+                        ctx.Response.ContentType = "application/json";
+                        ctx.Response.OutputStream.Write(errBytes, 0, errBytes.Length);
+                        ctx.Response.Close();
+                    }
+                    catch { }
+                }
+            }
+
+            CleanupDummyProcesses();
+        }
+
+        private static async Task HandleRelayRequestAsync(HttpListenerContext ctx)
+        {
+            string path = ctx.Request.Url.AbsolutePath.TrimEnd('/');
+            ctx.Response.AddHeader("Access-Control-Allow-Origin", "*");
+            ctx.Response.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+            ctx.Response.AddHeader("Access-Control-Allow-Headers", "Content-Type");
+
+            if (ctx.Request.HttpMethod == "OPTIONS")
+            {
+                ctx.Response.StatusCode = 204;
+                ctx.Response.Close();
+                return;
+            }
+
+            switch (path)
+            {
+                case "/health":
+                    WriteJson(ctx.Response, 200, "{\"ok\":true}");
+                    break;
+
+                case "/process/start":
+                    await HandleProcessStartAsync(ctx);
+                    break;
+
+                case "/process/stop":
+                    await HandleProcessStopAsync(ctx);
+                    break;
+
+                case "/proxy":
+                    await HandleProxyAsync(ctx);
+                    break;
+
+                default:
+                    WriteJson(ctx.Response, 404, "{\"error\":\"not found\"}");
+                    break;
+            }
+        }
+
+        private static async Task HandleProcessStartAsync(HttpListenerContext ctx)
+        {
+            string body = await ReadBodyAsync(ctx.Request);
+            IDictionary<string, object> data = Json.DeserializeObject(body) as IDictionary<string, object>;
+            string exe = data != null ? GetString(data, "exe") : "";
+
+            if (string.IsNullOrWhiteSpace(exe))
+            {
+                WriteJson(ctx.Response, 400, "{\"error\":\"exe required\"}");
+                return;
+            }
+
+            string tempDir = Path.Combine(Path.GetTempPath(), "claw_dummy");
+            if (!Directory.Exists(tempDir))
+            {
+                Directory.CreateDirectory(tempDir);
+            }
+
+            string dummyPath = Path.Combine(tempDir, exe);
+            if (!File.Exists(dummyPath))
+            {
+                string src = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe");
+                File.Copy(src, dummyPath, true);
+            }
+
+            ProcessStartInfo psi = new ProcessStartInfo
+            {
+                FileName = dummyPath,
+                Arguments = "/c ping -n 2147483647 127.0.0.1 > nul",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
+
+            Process proc = Process.Start(psi);
+            if (proc == null)
+            {
+                WriteJson(ctx.Response, 500, "{\"error\":\"failed to start process\"}");
+                return;
+            }
+
+            lock (ProcessLock)
+            {
+                DummyProcesses[proc.Id] = proc;
+            }
+
+            WriteJson(ctx.Response, 200, string.Format("{{\"ok\":true,\"pid\":{0},\"exe\":\"{1}\"}}", proc.Id, exe.Replace("\"", "'")));
+        }
+
+        private static async Task HandleProcessStopAsync(HttpListenerContext ctx)
+        {
+            string body = await ReadBodyAsync(ctx.Request);
+            IDictionary<string, object> data = Json.DeserializeObject(body) as IDictionary<string, object>;
+            int pid = 0;
+            if (data != null)
+            {
+                try { pid = Convert.ToInt32(data["pid"]); } catch { }
+            }
+
+            if (pid == 0)
+            {
+                WriteJson(ctx.Response, 400, "{\"error\":\"pid required\"}");
+                return;
+            }
+
+            bool killed = false;
+            lock (ProcessLock)
+            {
+                Process proc;
+                if (DummyProcesses.TryGetValue(pid, out proc))
+                {
+                    try { proc.Kill(); } catch { }
+                    try { proc.Dispose(); } catch { }
+                    DummyProcesses.Remove(pid);
+                    killed = true;
+                }
+            }
+
+            WriteJson(ctx.Response, 200, string.Format("{{\"ok\":true,\"killed\":{0}}}", killed ? "true" : "false"));
+        }
+
+        private static async Task HandleProxyAsync(HttpListenerContext ctx)
+        {
+            string body = await ReadBodyAsync(ctx.Request);
+            IDictionary<string, object> data = Json.DeserializeObject(body) as IDictionary<string, object>;
+            if (data == null)
+            {
+                WriteJson(ctx.Response, 400, "{\"error\":\"invalid json\"}");
+                return;
+            }
+
+            string url = GetString(data, "url");
+            string reqBody = GetString(data, "body");
+            IDictionary<string, object> headers = data.ContainsKey("headers") ? data["headers"] as IDictionary<string, object> : null;
+
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                WriteJson(ctx.Response, 400, "{\"error\":\"url required\"}");
+                return;
+            }
+
+            using (HttpClient client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) })
+            {
+                HttpContent content = new StringContent(reqBody ?? "", Encoding.UTF8, "application/json");
+
+                using (HttpRequestMessage req = new HttpRequestMessage(HttpMethod.Post, url))
+                {
+                    req.Content = content;
+                    if (headers != null)
+                    {
+                        foreach (KeyValuePair<string, object> kv in headers)
+                        {
+                            string hVal = kv.Value != null ? Convert.ToString(kv.Value) : "";
+                            if (string.Equals(kv.Key, "Content-Type", StringComparison.OrdinalIgnoreCase)) continue;
+                            if (string.Equals(kv.Key, "Referer", StringComparison.OrdinalIgnoreCase))
+                            {
+                                req.Headers.Referrer = new Uri(hVal);
+                                continue;
+                            }
+                            req.Headers.TryAddWithoutValidation(kv.Key, hVal);
+                        }
+                    }
+
+                    HttpResponseMessage resp = await client.SendAsync(req);
+                    string respBody = await resp.Content.ReadAsStringAsync();
+                    string result = string.Format("{{\"ok\":{0},\"status\":{1},\"body\":{2}}}",
+                        resp.IsSuccessStatusCode ? "true" : "false",
+                        (int)resp.StatusCode,
+                        Json.Serialize(respBody));
+                    WriteJson(ctx.Response, 200, result);
+                }
+            }
+        }
+
+        private static async Task<string> ReadBodyAsync(HttpListenerRequest request)
+        {
+            using (StreamReader reader = new StreamReader(request.InputStream, request.ContentEncoding))
+            {
+                return await reader.ReadToEndAsync();
+            }
+        }
+
+        private static void WriteJson(HttpListenerResponse response, int statusCode, string json)
+        {
+            byte[] bytes = Encoding.UTF8.GetBytes(json);
+            response.StatusCode = statusCode;
+            response.ContentType = "application/json";
+            response.ContentLength64 = bytes.Length;
+            response.OutputStream.Write(bytes, 0, bytes.Length);
+            response.Close();
+        }
+
+        private static void CleanupDummyProcesses()
+        {
+            lock (ProcessLock)
+            {
+                foreach (KeyValuePair<int, Process> kv in DummyProcesses)
+                {
+                    try { kv.Value.Kill(); } catch { }
+                    try { kv.Value.Dispose(); } catch { }
+                }
+                DummyProcesses.Clear();
+            }
+
+            try
+            {
+                string tempDir = Path.Combine(Path.GetTempPath(), "claw_dummy");
+                if (Directory.Exists(tempDir))
+                {
+                    Directory.Delete(tempDir, true);
+                }
+            }
+            catch { }
         }
 
         private static void AutoClose()

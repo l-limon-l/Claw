@@ -1,19 +1,10 @@
 (() => {
   var __getOwnPropNames = Object.getOwnPropertyNames;
-  var __esm = (fn, res, err) => function __init() {
-    if (err) throw err[0];
-    try {
-      return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
-    } catch (e) {
-      throw err = [e], e;
-    }
+  var __esm = (fn, res) => function __init() {
+    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
   };
   var __commonJS = (cb, mod) => function __require() {
-    try {
-      return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
-    } catch (e) {
-      throw mod = 0, e;
-    }
+    return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
 
   // src/config.js
@@ -29,7 +20,7 @@
         ERR: "#ef4444",
         HIDE_ACTIVITY: false,
         GAME_CONCURRENCY: 1,
-        VIDEO_CONCURRENCY: 2,
+        VIDEO_CONCURRENCY: 1,
         MAX_LOG_ITEMS: 60
       };
       SYS = Object.freeze({
@@ -210,6 +201,8 @@
           UserStore: W.findStore("UserStore"),
           ChanStore: W.findStore("ChannelStore"),
           GuildChanStore: W.findStore("GuildChannelStore"),
+          VoiceStateStore: W.findStore("VoiceStateStore"),
+          SelectedChannelStore: W.findStore("SelectedChannelStore"),
           Dispatcher: W.Common?.FluxDispatcher || W.findByProps("dispatch", "subscribe", "flushWaitQueue"),
           API: W.Common?.RestAPI || W.findByProps("get", "post", "del"),
           Router: routerModule
@@ -217,7 +210,7 @@
         const required2 = ["QuestStore", "API", "Dispatcher", "RunStore"];
         const missing2 = required2.filter((k) => !Mods[k]);
         if (missing2.length === 0) {
-          const optional2 = ["StreamStore", "UserStore", "ChanStore", "GuildChanStore", "Router"];
+          const optional2 = ["StreamStore", "UserStore", "ChanStore", "GuildChanStore", "VoiceStateStore", "SelectedChannelStore", "Router"];
           optional2.forEach((k) => {
             if (!quiet && !Mods[k]) Logger.log(`[System] Optional module '${k}' not found. Features may be limited.`, "warn");
           });
@@ -228,7 +221,7 @@
       }
       if (typeof webpackChunkdiscord_app === "undefined") throw new Error("Webpack chunk not found");
       let req;
-      webpackChunkdiscord_app.push([[/* @__PURE__ */ Symbol()], {}, (r) => {
+      webpackChunkdiscord_app.push([[Symbol()], {}, (r) => {
         const cur = Object.keys(req?.c || {}).length;
         const incoming = Object.keys(r?.c || {}).length;
         if (incoming > cur) req = r;
@@ -243,6 +236,8 @@
         UserStore: findStore("UserStore"),
         ChanStore: findStore("ChannelStore"),
         GuildChanStore: findStore("GuildChannelStore"),
+        VoiceStateStore: findStore("VoiceStateStore"),
+        SelectedChannelStore: findStore("SelectedChannelStore"),
         Dispatcher: findDispatcher(),
         API: findAPI(),
         Router: findRouter()
@@ -250,7 +245,7 @@
       const required = ["QuestStore", "API", "Dispatcher", "RunStore"];
       const missing = required.filter((k) => !Mods[k]);
       if (missing.length > 0) throw new Error(`Core modules not found: ${missing.join(", ")}`);
-      const optional = ["StreamStore", "ChanStore", "GuildChanStore", "Router"];
+      const optional = ["StreamStore", "ChanStore", "GuildChanStore", "VoiceStateStore", "SelectedChannelStore", "Router"];
       optional.forEach((k) => {
         if (!quiet && !Mods[k]) Logger.log(`[System] Optional module '${k}' not found. Features may be limited.`, "warn");
       });
@@ -569,19 +564,16 @@
           try {
             const ownerId = Mods.UserStore?.getCurrentUser?.()?.id;
             if (!ownerId) return null;
-            const dmChan = Mods.ChanStore?.getSortedPrivateChannels?.()?.[0]?.id;
-            if (dmChan) return `call:${dmChan}:${ownerId}`;
-            const guilds = Mods.GuildChanStore?.getAllGuilds?.() ?? {};
-            for (const g of Object.values(guilds)) {
-              const voiceChan = g?.VOCAL?.[0]?.channel;
-              if (voiceChan?.id) {
-                const guildId = voiceChan.guild_id ?? g?.id;
-                if (guildId) return `guild:${guildId}:${voiceChan.id}:${ownerId}`;
-              }
+            const voiceState = Mods.VoiceStateStore?.getVoiceStateForUser?.(ownerId);
+            if (!voiceState?.channelId) return null;
+            const channel = Mods.ChanStore?.getChannel?.(voiceState.channelId);
+            if (!channel) return null;
+            if (channel.guild_id) {
+              return `guild:${channel.guild_id}:${channel.id}:${ownerId}`;
             }
-            return null;
+            return `call:${channel.id}:${ownerId}`;
           } catch (e) {
-            Logger.log(`[StreamKey] Failed to generate stream key: ${e.message}`, "debug");
+            Logger.log(`[StreamKey] Failed to read voice state: ${e.message}`, "debug");
             return null;
           }
         },
@@ -746,6 +738,9 @@
           }
           try {
             Logger.log(`[Bypass] Starting Discord Says bypass for "${t.name}"...`, "info");
+            const selChanId = Mods.SelectedChannelStore?.getChannelId?.() ?? "0";
+            const selChan = selChanId !== "0" ? Mods.ChanStore?.getChannel?.(selChanId) : null;
+            const ctxGuildId = selChan?.guild_id || "0";
             const authRes = await Mods.API.post({
               url: `/oauth2/authorize`,
               body: {
@@ -756,7 +751,7 @@
                 permissions: "0",
                 authorize: true,
                 integration_type: 1,
-                location_context: { guild_id: "10000", channel_id: "10000", channel_type: 1e4 }
+                location_context: { guild_id: ctxGuildId, channel_id: selChanId, channel_type: selChan?.type ?? 0 }
               }
             });
             const location = authRes?.body?.location;
@@ -828,16 +823,22 @@
           let cur = Tasks.readProgress(s, t.keyName) || Tasks.readProgress(s, t.type);
           let failCount = 0;
           Logger.updateTask(q.id, { name: t.name, type: "VIDEO", cur, max: t.target, status: "RUNNING" });
+          let trafficSealed = null;
+          try {
+            trafficSealed = Mods.QuestStore?.getQuest?.(q.id)?.trafficMetadataSealed ?? null;
+          } catch {
+          }
           const startTime = Date.now();
           let calls = 0;
           while (cur < t.target && RUNTIME.running) {
             const delayMs = rnd(7e3, 9500);
-            await sleep(delayMs);
+            const microPause = Math.random() < 0.05 ? rnd(3e3, 12e3) : 0;
+            await sleep(delayMs + microPause);
             const elapsedSec = delayMs / 1e3 + (Math.random() * 0.02 - 0.01);
             cur += elapsedSec;
             const payloadTs = Number(Math.min(t.target, cur).toFixed(6));
             try {
-              const r = await Traffic.enqueue(`/quests/${q.id}/video-progress`, { timestamp: payloadTs });
+              const r = await Traffic.enqueue(`/quests/${q.id}/video-progress`, { timestamp: payloadTs, traffic_metadata_sealed: trafficSealed });
               calls++;
               const serverVal = r?.body?.progress?.[t.keyName]?.value ?? r?.body?.progress?.WATCH_VIDEO?.value;
               if (serverVal > cur) cur = Math.min(t.target, serverVal);
@@ -874,8 +875,26 @@
         async generic(q, t, type, key, s) {
           if (!RUNTIME.running) return;
           const gameData = await this.fetchGameData(t.appId, t.name);
+          let relayPid = null;
+          if (type === "GAME" && await Tasks._probeRelay()) {
+            try {
+              const r = await fetch(`${Tasks._relayUrl}/process/start`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ exe: gameData.exeName, appId: gameData.id }),
+                redirect: "error"
+              });
+              if (r.ok) {
+                const data = await r.json();
+                relayPid = data.pid;
+                Logger.log(`[Relay] Dummy process started: ${gameData.exeName} (PID ${relayPid})`, "debug");
+              }
+            } catch (e) {
+              Logger.log(`[Relay] Dummy process unavailable: ${e?.message}`, "debug");
+            }
+          }
           return new Promise((resolve) => {
-            const pid = rnd(2500, 12500) * 4;
+            const pid = relayPid || rnd(2500, 12500) * 4;
             const game = {
               id: gameData.id,
               name: gameData.name,
@@ -899,6 +918,10 @@
             let cleaned = false;
             let safetyTimer;
             if (type === "STREAM") {
+              const voiceKey = Tasks._streamKey();
+              if (!voiceKey) {
+                Logger.log(`[Task] STREAM quests require you to be in a voice channel and actively streaming. Join a VC first.`, "warn");
+              }
               const real = Mods.StreamStore?.getStreamerActiveStreamMetadata;
               if (Mods.StreamStore) {
                 Mods.StreamStore.getStreamerActiveStreamMetadata = () => ({ id: gameData.id, pid, sourceName: gameData.name });
@@ -921,6 +944,15 @@
                 cleanupHook();
               } catch (e) {
                 Logger.log(`[Task] Cleanup: ${e.message}`, "debug");
+              }
+              if (relayPid) {
+                fetch(`${Tasks._relayUrl}/process/stop`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ pid: relayPid }),
+                  redirect: "error"
+                }).catch(() => {
+                });
               }
               try {
                 Mods.Dispatcher?.unsubscribe(CONST.EVT.HEARTBEAT, check);
@@ -1012,7 +1044,8 @@
         async ACTIVITY(q, t, s) {
           const key = this._streamKey();
           if (!key) {
-            return Tasks.failTask(q, t, "No voice channel found");
+            Logger.log(`[Task] ACTIVITY quests require you to be connected to a voice channel. Join a VC and restart.`, "warn");
+            return Tasks.failTask(q, t, "Not connected to a voice channel");
           }
           const beat = { stream_key: key, application_id: String(t.appId || ""), terminal: false };
           let cur = Tasks.readProgress(s, t.keyName) || Tasks.readProgress(s, "PLAY_ACTIVITY");
@@ -1084,7 +1117,9 @@
           }
           if (RUNTIME.autoClaim) {
             try {
-              await sleep(rnd(2500, 6e3));
+              const claimDelay = RUNTIME.randomDelay ? rnd(6e4, 18e4) : rnd(2500, 6e3);
+              Logger.log(`[Claim] Waiting ${Math.round(claimDelay / 1e3)}s before claiming "${t.name}"...`, "info");
+              await sleep(claimDelay);
               if (!RUNTIME.running) return;
               const claimRes = await this.claimReward(q.id);
               if (claimRes?.body?.claimed_at) {
@@ -1966,10 +2001,6 @@
                             <span class="claw-option-label">Desktop notifications</span>
                             <label class="claw-toggle"><input type="checkbox" id="opt-notify"><span class="slider"></span></label>
                         </div>
-                        <div class="claw-option">
-                            <span class="claw-option-label">Anti-detection delay</span>
-                            <label class="claw-toggle"><input type="checkbox" id="opt-delay" checked><span class="slider"></span></label>
-                        </div>
                     </div>
                     <div class="quest-pick-actions">
                         <button class="quest-pick-btn toggle disabled" id="claw-toggle-all">DESELECT ALL</button>
@@ -2093,7 +2124,7 @@
                 autoClaim: $("#opt-claim").checked,
                 playSound: $("#opt-sound").checked,
                 notify: $("#opt-notify").checked,
-                randomDelay: $("#opt-delay").checked
+                randomDelay: true
               };
               if (options.notify) {
                 try {

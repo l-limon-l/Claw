@@ -7,7 +7,7 @@ export const CONFIG = {
     ERR: "#ef4444",
     HIDE_ACTIVITY: false,
     GAME_CONCURRENCY: 1,
-    VIDEO_CONCURRENCY: 2,
+    VIDEO_CONCURRENCY: 1,
     MAX_LOG_ITEMS: 60
 };
 

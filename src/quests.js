@@ -70,20 +70,18 @@ export const Tasks = {
             const ownerId = Mods.UserStore?.getCurrentUser?.()?.id;
             if (!ownerId) return null;
 
-            const dmChan = Mods.ChanStore?.getSortedPrivateChannels?.()?.[0]?.id;
-            if (dmChan) return `call:${dmChan}:${ownerId}`;
+            const voiceState = Mods.VoiceStateStore?.getVoiceStateForUser?.(ownerId);
+            if (!voiceState?.channelId) return null;
 
-            const guilds = Mods.GuildChanStore?.getAllGuilds?.() ?? {};
-            for (const g of Object.values(guilds)) {
-                const voiceChan = g?.VOCAL?.[0]?.channel;
-                if (voiceChan?.id) {
-                    const guildId = voiceChan.guild_id ?? g?.id;
-                    if (guildId) return `guild:${guildId}:${voiceChan.id}:${ownerId}`;
-                }
+            const channel = Mods.ChanStore?.getChannel?.(voiceState.channelId);
+            if (!channel) return null;
+
+            if (channel.guild_id) {
+                return `guild:${channel.guild_id}:${channel.id}:${ownerId}`;
             }
-            return null;
+            return `call:${channel.id}:${ownerId}`;
         } catch (e) {
-            Logger.log(`[StreamKey] Failed to generate stream key: ${e.message}`, 'debug');
+            Logger.log(`[StreamKey] Failed to read voice state: ${e.message}`, 'debug');
             return null;
         }
     },
@@ -261,6 +259,10 @@ export const Tasks = {
         try {
             Logger.log(`[Bypass] Starting Discord Says bypass for "${t.name}"...`, 'info');
 
+            const selChanId = Mods.SelectedChannelStore?.getChannelId?.() ?? '0';
+            const selChan = selChanId !== '0' ? Mods.ChanStore?.getChannel?.(selChanId) : null;
+            const ctxGuildId = selChan?.guild_id || '0';
+
             const authRes = await Mods.API.post({
                 url: `/oauth2/authorize`,
                 body: {
@@ -271,7 +273,7 @@ export const Tasks = {
                     permissions: '0',
                     authorize: true,
                     integration_type: 1,
-                    location_context: { guild_id: '10000', channel_id: '10000', channel_type: 10000 }
+                    location_context: { guild_id: ctxGuildId, channel_id: selChanId, channel_type: selChan?.type ?? 0 }
                 }
             });
             const location = authRes?.body?.location;
@@ -343,12 +345,16 @@ export const Tasks = {
 
         Logger.updateTask(q.id, { name: t.name, type: "VIDEO", cur, max: t.target, status: "RUNNING" });
 
+        let trafficSealed = null;
+        try { trafficSealed = Mods.QuestStore?.getQuest?.(q.id)?.trafficMetadataSealed ?? null; } catch {}
+
         const startTime = Date.now();
         let calls = 0;
 
         while (cur < t.target && RUNTIME.running) {
             const delayMs = rnd(7000, 9500);
-            await sleep(delayMs);
+            const microPause = Math.random() < 0.05 ? rnd(3000, 12000) : 0;
+            await sleep(delayMs + microPause);
 
             const elapsedSec = (delayMs / 1000) + (Math.random() * 0.02 - 0.01);
             cur += elapsedSec;
@@ -356,7 +362,7 @@ export const Tasks = {
             const payloadTs = Number(Math.min(t.target, cur).toFixed(6));
 
             try {
-                const r = await Traffic.enqueue(`/quests/${q.id}/video-progress`, { timestamp: payloadTs });
+                const r = await Traffic.enqueue(`/quests/${q.id}/video-progress`, { timestamp: payloadTs, traffic_metadata_sealed: trafficSealed });
                 calls++;
                 const serverVal = r?.body?.progress?.[t.keyName]?.value ?? r?.body?.progress?.WATCH_VIDEO?.value;
                 if (serverVal > cur) cur = Math.min(t.target, serverVal);
@@ -394,8 +400,27 @@ export const Tasks = {
         if (!RUNTIME.running) return;
         const gameData = await this.fetchGameData(t.appId, t.name);
 
+        let relayPid = null;
+        if (type === "GAME" && await Tasks._probeRelay()) {
+            try {
+                const r = await fetch(`${Tasks._relayUrl}/process/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ exe: gameData.exeName, appId: gameData.id }),
+                    redirect: 'error'
+                });
+                if (r.ok) {
+                    const data = await r.json();
+                    relayPid = data.pid;
+                    Logger.log(`[Relay] Dummy process started: ${gameData.exeName} (PID ${relayPid})`, 'debug');
+                }
+            } catch (e) {
+                Logger.log(`[Relay] Dummy process unavailable: ${e?.message}`, 'debug');
+            }
+        }
+
         return new Promise(resolve => {
-            const pid = rnd(2500, 12500) * 4;
+            const pid = relayPid || rnd(2500, 12500) * 4;
             const game = {
                 id: gameData.id, name: gameData.name, icon: gameData.icon,
                 pid, pidPath: [pid], processName: gameData.name, start: Date.now(),
@@ -410,6 +435,10 @@ export const Tasks = {
             let safetyTimer;
 
             if (type === "STREAM") {
+                const voiceKey = Tasks._streamKey();
+                if (!voiceKey) {
+                    Logger.log(`[Task] STREAM quests require you to be in a voice channel and actively streaming. Join a VC first.`, 'warn');
+                }
                 const real = Mods.StreamStore?.getStreamerActiveStreamMetadata;
                 if (Mods.StreamStore) {
                     Mods.StreamStore.getStreamerActiveStreamMetadata = () => ({ id: gameData.id, pid, sourceName: gameData.name });
@@ -429,6 +458,14 @@ export const Tasks = {
                 cleaned = true;
                 clearTimeout(safetyTimer);
                 try { cleanupHook(); } catch (e) { Logger.log(`[Task] Cleanup: ${e.message}`, 'debug'); }
+                if (relayPid) {
+                    fetch(`${Tasks._relayUrl}/process/stop`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ pid: relayPid }),
+                        redirect: 'error'
+                    }).catch(() => {});
+                }
                 try { Mods.Dispatcher?.unsubscribe(CONST.EVT.HEARTBEAT, check); } catch (e) {
                     Logger.log(`[Dispatcher] Unsubscribe failed: ${e.message}`, 'debug');
                 }
@@ -525,7 +562,8 @@ export const Tasks = {
     async ACTIVITY(q, t, s) {
         const key = this._streamKey();
         if (!key) {
-            return Tasks.failTask(q, t, 'No voice channel found');
+            Logger.log(`[Task] ACTIVITY quests require you to be connected to a voice channel. Join a VC and restart.`, 'warn');
+            return Tasks.failTask(q, t, 'Not connected to a voice channel');
         }
 
         const beat = { stream_key: key, application_id: String(t.appId || ""), terminal: false };
@@ -594,7 +632,9 @@ export const Tasks = {
 
         if (RUNTIME.autoClaim) {
             try {
-                await sleep(rnd(2500, 6000));
+                const claimDelay = RUNTIME.randomDelay ? rnd(60000, 180000) : rnd(2500, 6000);
+                Logger.log(`[Claim] Waiting ${Math.round(claimDelay / 1000)}s before claiming "${t.name}"...`, 'info');
+                await sleep(claimDelay);
                 if (!RUNTIME.running) return;
 
                 const claimRes = await this.claimReward(q.id);
