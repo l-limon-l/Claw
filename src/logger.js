@@ -244,6 +244,7 @@ export const Logger = {
             .quest-pick-meta { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
             .quest-pick-type { font-size: 10px; font-weight: 500; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; }
             .quest-pick-reward { font-size: 10px; font-weight: 500; }
+            .quest-pick-vc { font-size: 9px; font-weight: 600; color: var(--warn-bright); border: 1px solid var(--warn-bright); border-radius: 4px; padding: 1px 5px; letter-spacing: 0.4px; white-space: nowrap; opacity: 0.85; }
             .quest-pick-section { font-size: 11px; color: var(--text-tertiary); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; margin-top: 4px; }
             .quest-pick-filters { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
             .reward-filter {
