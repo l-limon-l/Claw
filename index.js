@@ -13,7 +13,7 @@
     "src/config.js"() {
       CONFIG = {
         NAME: "Claw",
-        VERSION: "v4.7.0 (Enterprise Core)",
+        VERSION: "v4.8.0 (Enterprise Core)",
         THEME: "#7170ff",
         SUCCESS: "#10b981",
         WARN: "#f59e0b",
