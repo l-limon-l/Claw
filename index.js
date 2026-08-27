@@ -57,7 +57,6 @@
         CHECK: `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>`,
         CLOCK: `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/><path d="M12.5 7H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>`,
         STOP: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"/></svg>`,
-        MIC: `<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>`,
         GITHUB: `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.699-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.022A9.606 9.606 0 0112 6.82c.85.004 1.705.114 2.504.336 1.909-1.29 2.747-1.022 2.747-1.022.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>`,
         LINK: `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>`,
         USER: `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>`
@@ -588,6 +587,34 @@
           }
         },
         /**
+         * Stream key for quests that need one, without requiring a live voice connection.
+         * Prefers the real voice state when there is one — that key is truthful and matches
+         * what Discord sees server-side. Otherwise derives a well-formed key from a channel
+         * the account actually has, which is what lets ACTIVITY quests run outside a VC.
+         */
+        _anyStreamKey() {
+          const real = Tasks._streamKey();
+          if (real) return real;
+          try {
+            const ownerId = Mods.UserStore?.getCurrentUser?.()?.id;
+            if (!ownerId) return null;
+            const guilds = Mods.GuildChanStore?.getAllGuilds?.() ?? {};
+            for (const g of Object.values(guilds)) {
+              const voiceChan = g?.VOCAL?.[0]?.channel;
+              if (voiceChan?.id) {
+                const guildId = voiceChan.guild_id ?? g?.id;
+                if (guildId) return `guild:${guildId}:${voiceChan.id}:${ownerId}`;
+              }
+            }
+            const dmChan = Mods.ChanStore?.getSortedPrivateChannels?.()?.[0]?.id;
+            if (dmChan) return `call:${dmChan}:${ownerId}`;
+            return null;
+          } catch (e) {
+            Logger.log(`[StreamKey] Fallback key failed: ${e.message}`, "debug");
+            return null;
+          }
+        },
+        /**
          * userStatus.progress is a plain object over REST, but dispatched payloads go through
          * Discord's client transform first — it may arrive as a Map. Bracket notation on a Map
          * returns undefined, silently looking like "no progress". Handle both shapes.
@@ -932,9 +959,9 @@
               let cleaned = false;
               let safetyTimer;
               if (type === "STREAM") {
-                const voiceKey = Tasks._streamKey();
+                const voiceKey = Tasks._anyStreamKey();
                 if (!voiceKey) {
-                  Logger.log(`[Task] STREAM quests require you to be in a voice channel and actively streaming. Join a VC first.`, "warn");
+                  Logger.log(`[Task] STREAM: could not build a stream key for this account.`, "warn");
                 }
                 const real = Mods.StreamStore?.getStreamerActiveStreamMetadata;
                 if (Mods.StreamStore) {
@@ -1018,7 +1045,7 @@
         async ACHIEVEMENT(q, t, s) {
           const initialProg = Tasks.readProgress(s, t.keyName) || Tasks.readProgress(s, "ACHIEVEMENT_IN_ACTIVITY");
           Logger.updateTask(q.id, { name: t.name, type: "ACHIEVEMENT", cur: initialProg, max: t.target, status: "RUNNING" });
-          const key = Tasks._streamKey();
+          const key = Tasks._anyStreamKey();
           if (key) {
             Logger.log(`[Task] Attempting heartbeat spoofing for "${t.name}"...`, "info");
             const beat = { stream_key: key, application_id: String(t.appId || ""), terminal: false };
@@ -1072,10 +1099,10 @@
           return Tasks.failTask(q, t, "Cannot auto-complete");
         },
         async ACTIVITY(q, t, s) {
-          const key = Tasks._streamKey();
+          const key = Tasks._anyStreamKey();
           if (!key) {
-            Logger.log(`[Task] ACTIVITY quests require you to be connected to a voice channel. Join a VC and restart.`, "warn");
-            return Tasks.failTask(q, t, "Not connected to a voice channel");
+            Logger.log(`[Task] Could not build a stream key \u2014 no voice channel or DM available on this account.`, "warn");
+            return Tasks.failTask(q, t, "No usable stream key");
           }
           const beat = { stream_key: key, application_id: String(t.appId || ""), terminal: false };
           let cur = Tasks.readProgress(s, t.keyName) || Tasks.readProgress(s, "PLAY_ACTIVITY");
@@ -1424,7 +1451,6 @@
             .quest-pick-meta { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
             .quest-pick-type { font-size: 10px; font-weight: 500; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; }
             .quest-pick-reward { font-size: 10px; font-weight: 500; }
-            .quest-pick-vc { font-size: 9px; font-weight: 600; color: var(--warn-bright); border: 1px solid var(--warn-bright); border-radius: 4px; padding: 1px 5px; letter-spacing: 0.4px; white-space: nowrap; opacity: 0.85; }
             .quest-pick-section { font-size: 11px; color: var(--text-tertiary); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; margin-top: 4px; }
             .quest-pick-filters { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
             .reward-filter {
@@ -2008,11 +2034,7 @@
                 name: q.config?.messages?.questName ?? "Unknown Quest",
                 type: td.type === "WATCH_VIDEO" ? "VIDEO" : td.type,
                 rt: rewardType,
-                reward: rw?.messages?.name ?? "Unknown",
-                // These read the account's real voice state to build a stream key.
-                // Without an actual voice connection ACTIVITY aborts outright and
-                // STREAM cannot report progress, so flag them up front.
-                needsVoice: td.type === "ACTIVITY" || td.type === "STREAM"
+                reward: rw?.messages?.name ?? "Unknown"
               });
             });
             const rewardTypes = [...new Set(items.map((q) => q.rt))].sort();
@@ -2057,10 +2079,6 @@
                 return `<button class="reward-filter" data-rt="${rt}" style="border-color:${m.color};color:${m.color};">${m.label} (${items.filter((q) => q.rt === rt).length})</button>`;
               }).join("")}
                         </div>
-                        <div id="claw-vc-warn" style="display:none;margin:6px 0 8px;padding:9px 11px;border-radius:9px;border:1px solid var(--warn-bright);background:rgba(245,158,11,0.10);color:var(--warn-bright);font-size:12px;line-height:1.45;">
-                            <b>Join a voice channel first.</b><br>
-                            Quests marked <b>VOICE</b> report progress from your real voice connection. Any voice channel works \u2014 Claw picks it up automatically.
-                        </div>
                         <div id="claw-quest-list" style="max-height: 160px; overflow-y: auto; padding-right: 8px;">
                             ${items.map((q) => {
                 const c = meta(q.rt).color;
@@ -2071,7 +2089,6 @@
                                         <div class="quest-pick-meta">
                                             <span class="quest-pick-type">${esc(q.type)}</span>
                                             <span class="quest-pick-reward" style="color:${c};">${esc(q.reward)}</span>
-                                            ${q.needsVoice ? `<span class="quest-pick-vc" title="Requires you to be connected to a voice channel">${ICONS.MIC} VOICE</span>` : ""}
                                         </div>
                                     </div>
                                 </label>`;
@@ -2118,22 +2135,10 @@
               const allChecked = visible.length > 0 && visible.every((c) => c.querySelector("input").checked);
               $("#claw-toggle-all").textContent = allChecked ? "DESELECT ALL" : "SELECT ALL";
             };
-            const voiceIds = new Set(items.filter((q) => q.needsVoice).map((q) => q.id));
-            const syncVoiceWarn = () => {
-              const warn = $("#claw-vc-warn");
-              if (!warn) return;
-              const armed = $$("input[data-qid]:checked").some((cb) => voiceIds.has(cb.dataset.qid));
-              warn.style.display = armed && !Tasks._streamKey() ? "block" : "none";
-            };
-            const voiceTimer = voiceIds.size ? setInterval(syncVoiceWarn, 1500) : null;
-            const stopVoiceWatch = () => {
-              if (voiceTimer) clearInterval(voiceTimer);
-            };
             if (items.length) {
               $$("input[data-qid]").forEach((cb) => cb.addEventListener("change", () => {
                 syncStartBtn();
                 syncToggleLabel();
-                syncVoiceWarn();
               }));
               const filters = Object.fromEntries(rewardTypes.map((rt) => [rt, true]));
               $$(".reward-filter").forEach((btn) => {
@@ -2147,7 +2152,6 @@
                   });
                   syncStartBtn();
                   syncToggleLabel();
-                  syncVoiceWarn();
                 });
               });
               $("#claw-toggle-all").addEventListener("click", () => {
@@ -2158,9 +2162,7 @@
                 });
                 syncToggleLabel();
                 syncStartBtn();
-                syncVoiceWarn();
               });
-              syncVoiceWarn();
             }
             $("#claw-start-btn").addEventListener("click", async () => {
               const selected = /* @__PURE__ */ new Set();
@@ -2175,7 +2177,6 @@
                 Logger.log("[Picker] Select at least one quest before starting.", "warn");
                 return;
               }
-              stopVoiceWatch();
               const options = {
                 autoEnroll: $("#opt-enroll").checked,
                 autoClaim: $("#opt-claim").checked,

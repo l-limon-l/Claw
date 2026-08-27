@@ -65,11 +65,7 @@ if (window.clawLock) {
                     name: q.config?.messages?.questName ?? "Unknown Quest",
                     type: td.type === "WATCH_VIDEO" ? "VIDEO" : td.type,
                     rt: rewardType,
-                    reward: rw?.messages?.name ?? "Unknown",
-                    // These read the account's real voice state to build a stream key.
-                    // Without an actual voice connection ACTIVITY aborts outright and
-                    // STREAM cannot report progress, so flag them up front.
-                    needsVoice: td.type === "ACTIVITY" || td.type === "STREAM"
+                    reward: rw?.messages?.name ?? "Unknown"
                 });
             });
 
@@ -117,10 +113,6 @@ if (window.clawLock) {
                                 return `<button class="reward-filter" data-rt="${rt}" style="border-color:${m.color};color:${m.color};">${m.label} (${items.filter(q => q.rt === rt).length})</button>`;
                             }).join('')}
                         </div>
-                        <div id="claw-vc-warn" style="display:none;margin:6px 0 8px;padding:9px 11px;border-radius:9px;border:1px solid var(--warn-bright);background:rgba(245,158,11,0.10);color:var(--warn-bright);font-size:12px;line-height:1.45;">
-                            <b>Join a voice channel first.</b><br>
-                            Quests marked <b>VOICE</b> report progress from your real voice connection. Any voice channel works — Claw picks it up automatically.
-                        </div>
                         <div id="claw-quest-list" style="max-height: 160px; overflow-y: auto; padding-right: 8px;">
                             ${items.map(q => {
                                 const c = meta(q.rt).color;
@@ -131,7 +123,6 @@ if (window.clawLock) {
                                         <div class="quest-pick-meta">
                                             <span class="quest-pick-type">${esc(q.type)}</span>
                                             <span class="quest-pick-reward" style="color:${c};">${esc(q.reward)}</span>
-                                            ${q.needsVoice ? `<span class="quest-pick-vc" title="Requires you to be connected to a voice channel">${ICONS.MIC} VOICE</span>` : ''}
                                         </div>
                                     </div>
                                 </label>`;
@@ -182,20 +173,8 @@ if (window.clawLock) {
                 $('#claw-toggle-all').textContent = allChecked ? 'DESELECT ALL' : 'SELECT ALL';
             };
 
-            // Warn only while it is actionable: a voice-dependent quest is selected and the
-            // account is not in a voice channel. Polled so it clears the moment the user joins.
-            const voiceIds = new Set(items.filter(q => q.needsVoice).map(q => q.id));
-            const syncVoiceWarn = () => {
-                const warn = $('#claw-vc-warn');
-                if (!warn) return;
-                const armed = $$('input[data-qid]:checked').some(cb => voiceIds.has(cb.dataset.qid));
-                warn.style.display = (armed && !Tasks._streamKey()) ? 'block' : 'none';
-            };
-            const voiceTimer = voiceIds.size ? setInterval(syncVoiceWarn, 1500) : null;
-            const stopVoiceWatch = () => { if (voiceTimer) clearInterval(voiceTimer); };
-
             if (items.length) {
-                $$('input[data-qid]').forEach(cb => cb.addEventListener('change', () => { syncStartBtn(); syncToggleLabel(); syncVoiceWarn(); }));
+                $$('input[data-qid]').forEach(cb => cb.addEventListener('change', () => { syncStartBtn(); syncToggleLabel(); }));
 
                 const filters = Object.fromEntries(rewardTypes.map(rt => [rt, true]));
                 $$('.reward-filter').forEach(btn => {
@@ -209,7 +188,6 @@ if (window.clawLock) {
                         });
                         syncStartBtn();
                         syncToggleLabel();
-                        syncVoiceWarn();
                     });
                 });
 
@@ -219,10 +197,7 @@ if (window.clawLock) {
                     visible.forEach(c => { c.querySelector('input').checked = !allChecked; });
                     syncToggleLabel();
                     syncStartBtn();
-                    syncVoiceWarn();
                 });
-
-                syncVoiceWarn();
             }
 
             $('#claw-start-btn').addEventListener('click', async () => {
@@ -240,8 +215,6 @@ if (window.clawLock) {
                     return;
                 }
                 
-                stopVoiceWatch();
-
                 const options = {
                     autoEnroll: $('#opt-enroll').checked,
                     autoClaim: $('#opt-claim').checked,

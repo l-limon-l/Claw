@@ -87,6 +87,39 @@ export const Tasks = {
     },
 
     /**
+     * Stream key for quests that need one, without requiring a live voice connection.
+     * Prefers the real voice state when there is one — that key is truthful and matches
+     * what Discord sees server-side. Otherwise derives a well-formed key from a channel
+     * the account actually has, which is what lets ACTIVITY quests run outside a VC.
+     */
+    _anyStreamKey() {
+        const real = Tasks._streamKey();
+        if (real) return real;
+
+        try {
+            const ownerId = Mods.UserStore?.getCurrentUser?.()?.id;
+            if (!ownerId) return null;
+
+            const guilds = Mods.GuildChanStore?.getAllGuilds?.() ?? {};
+            for (const g of Object.values(guilds)) {
+                const voiceChan = g?.VOCAL?.[0]?.channel;
+                if (voiceChan?.id) {
+                    const guildId = voiceChan.guild_id ?? g?.id;
+                    if (guildId) return `guild:${guildId}:${voiceChan.id}:${ownerId}`;
+                }
+            }
+
+            const dmChan = Mods.ChanStore?.getSortedPrivateChannels?.()?.[0]?.id;
+            if (dmChan) return `call:${dmChan}:${ownerId}`;
+
+            return null;
+        } catch (e) {
+            Logger.log(`[StreamKey] Fallback key failed: ${e.message}`, 'debug');
+            return null;
+        }
+    },
+
+    /**
      * userStatus.progress is a plain object over REST, but dispatched payloads go through
      * Discord's client transform first — it may arrive as a Map. Bracket notation on a Map
      * returns undefined, silently looking like "no progress". Handle both shapes.
@@ -435,9 +468,9 @@ export const Tasks = {
             let safetyTimer;
 
             if (type === "STREAM") {
-                const voiceKey = Tasks._streamKey();
+                const voiceKey = Tasks._anyStreamKey();
                 if (!voiceKey) {
-                    Logger.log(`[Task] STREAM quests require you to be in a voice channel and actively streaming. Join a VC first.`, 'warn');
+                    Logger.log(`[Task] STREAM: could not build a stream key for this account.`, 'warn');
                 }
                 const real = Mods.StreamStore?.getStreamerActiveStreamMetadata;
                 if (Mods.StreamStore) {
@@ -515,7 +548,7 @@ export const Tasks = {
         const initialProg = Tasks.readProgress(s, t.keyName) || Tasks.readProgress(s, 'ACHIEVEMENT_IN_ACTIVITY');
         Logger.updateTask(q.id, { name: t.name, type: "ACHIEVEMENT", cur: initialProg, max: t.target, status: "RUNNING" });
 
-        const key = Tasks._streamKey();
+        const key = Tasks._anyStreamKey();
 
         if (key) {
             Logger.log(`[Task] Attempting heartbeat spoofing for "${t.name}"...`, 'info');
@@ -574,10 +607,10 @@ export const Tasks = {
     },
 
     async ACTIVITY(q, t, s) {
-        const key = Tasks._streamKey();
+        const key = Tasks._anyStreamKey();
         if (!key) {
-            Logger.log(`[Task] ACTIVITY quests require you to be connected to a voice channel. Join a VC and restart.`, 'warn');
-            return Tasks.failTask(q, t, 'Not connected to a voice channel');
+            Logger.log(`[Task] Could not build a stream key — no voice channel or DM available on this account.`, 'warn');
+            return Tasks.failTask(q, t, 'No usable stream key');
         }
 
         const beat = { stream_key: key, application_id: String(t.appId || ""), terminal: false };
