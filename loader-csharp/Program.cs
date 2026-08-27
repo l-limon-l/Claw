@@ -1193,7 +1193,7 @@ namespace ClawInjector
                 string exePath = entry == null ? "" : entry.Location;
                 if (string.IsNullOrEmpty(exePath) || !File.Exists(exePath)) return;
 
-                using (CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromSeconds(4)))
+                using (CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
                 {
                     HttpResponseMessage response = await Http.GetAsync(options.LatestMetadataUrl, cts.Token);
                     if (!response.IsSuccessStatusCode) return;
@@ -1243,9 +1243,9 @@ namespace ClawInjector
                     Environment.Exit(0);
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Non-fatal fallback: proceed with current binary if update check fails
+                PrintSubStep("Update check failed: " + ex.Message);
             }
         }
 
