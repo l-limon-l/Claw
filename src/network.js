@@ -1,5 +1,5 @@
 import { RUNTIME, SYS } from './config.js';
-import { ErrorHandler, sleep, rnd } from './utils.js';
+import { ErrorHandler, sleep, rnd, humanDelay } from './utils.js';
 import { Logger } from './logger.js';
 import { Mods } from './discord.js';
 
@@ -65,7 +65,7 @@ export const Traffic = {
                 }
             }
 
-            await sleep(rnd(1200, 1800));
+            await sleep(humanDelay(1500, 3500, 0.08, 2000, 8000));
         }
         this.processing = false;
     }

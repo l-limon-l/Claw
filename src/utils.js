@@ -3,6 +3,26 @@ export const rnd = (min, max) => Math.floor(Math.random() * (max - min + 1)) + m
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const notExpired = q => { const e = new Date(q.config?.expiresAt ?? 0).getTime(); return Number.isNaN(e) || e > Date.now(); };
 
+export function gaussRnd(min, max) {
+    let u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+    const mid = (min + max) / 2;
+    const spread = (max - min) / 6;
+    return Math.floor(Math.min(max, Math.max(min, mid + z * spread)));
+}
+
+export function humanDelay(baseMin, baseMax, distractChance = 0.12, distractMin = 4000, distractMax = 25000) {
+    let delay = gaussRnd(baseMin, baseMax);
+    if (Math.random() < distractChance) {
+        delay += gaussRnd(distractMin, distractMax);
+    }
+    return delay;
+}
+
+export const sessionDrift = () => 0.8 + Math.random() * 0.6;
+
 export const Storage = {
     save(key, value) {
         try { window.localStorage.setItem(`claw_${key}`, JSON.stringify(value)); }

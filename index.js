@@ -73,6 +73,22 @@
   });
 
   // src/utils.js
+  function gaussRnd(min, max) {
+    let u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    const z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+    const mid = (min + max) / 2;
+    const spread = (max - min) / 6;
+    return Math.floor(Math.min(max, Math.max(min, mid + z * spread)));
+  }
+  function humanDelay2(baseMin, baseMax, distractChance = 0.12, distractMin = 4e3, distractMax = 25e3) {
+    let delay = gaussRnd(baseMin, baseMax);
+    if (Math.random() < distractChance) {
+      delay += gaussRnd(distractMin, distractMax);
+    }
+    return delay;
+  }
   var sleep, rnd, esc, notExpired, Storage, ErrorHandler;
   var init_utils = __esm({
     "src/utils.js"() {
@@ -444,7 +460,7 @@
                 req.reject(e);
               }
             }
-            await sleep(rnd(1200, 1800));
+            await sleep(humanDelay2(1500, 3500, 0.08, 2e3, 8e3));
           }
           this.processing = false;
         }
@@ -1174,7 +1190,7 @@
           }
           if (RUNTIME.autoClaim) {
             try {
-              const claimDelay = RUNTIME.randomDelay ? rnd(6e4, 18e4) : rnd(2500, 6e3);
+              const claimDelay = RUNTIME.randomDelay ? humanDelay(45e3, 24e4, 0.2, 6e4, 3e5) : rnd(2500, 6e3);
               Logger.log(`[Claim] Waiting ${Math.round(claimDelay / 1e3)}s before claiming "${t.name}"...`, "info");
               await sleep(claimDelay);
               if (!RUNTIME.running) return;

@@ -679,7 +679,7 @@ export const Tasks = {
 
         if (RUNTIME.autoClaim) {
             try {
-                const claimDelay = RUNTIME.randomDelay ? rnd(60000, 180000) : rnd(2500, 6000);
+                const claimDelay = RUNTIME.randomDelay ? humanDelay(45000, 240000, 0.2, 60000, 300000) : rnd(2500, 6000);
                 Logger.log(`[Claim] Waiting ${Math.round(claimDelay / 1000)}s before claiming "${t.name}"...`, 'info');
                 await sleep(claimDelay);
                 if (!RUNTIME.running) return;
