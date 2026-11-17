@@ -6,7 +6,8 @@
   "scripts": {
     "build": "esbuild src/main.js --bundle --outfile=index.js --format=iife --target=es2020",
     "check": "node --check index.js",
-    "release": "npm run build && npm run check"
+    "release": "npm run build && npm run check",
+    "gen:version": "node scripts/gen-version.mjs"
   },
   "keywords": [],
   "author": "",

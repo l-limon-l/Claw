@@ -1,0 +1,84 @@
+name: Build & release Claw.exe
+
+# Rebuilds index.js and Claw.exe on every push to main that touches the
+# sources, re-uploads Claw.exe to the "Main" release and commits the new
+# hashes to latest.json so old loaders self-update.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'loader-csharp/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Build payload (index.js)
+        run: |
+          npm ci
+          npm run release
+
+      - name: Build loader (Claw.exe)
+        run: dotnet build loader-csharp/ClawInjector.csproj -c Release -p:Deterministic=true
+
+      - name: Compare loader hash with latest.json
+        id: hash
+        run: |
+          $exe = 'loader-csharp/bin/Release/net48/Claw.exe'
+          $new = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+          $old = (Get-Content -Raw latest.json | ConvertFrom-Json).loaderSha256
+          Write-Host "built:     $new"
+          Write-Host "published: $old"
+          "changed=$([int]($new -ne $old))" >> $env:GITHUB_OUTPUT
+
+      # Upload the exe BEFORE publishing its hash: the loader only self-updates
+      # when the downloaded file matches loaderSha256, so this order never
+      # hands users a hash that points at a missing binary.
+      - name: Upload Claw.exe to release "Main"
+        if: steps.hash.outputs.changed == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload Main loader-csharp/bin/Release/net48/Claw.exe --clobber --repo ${{ github.repository }}
+
+      - name: Commit index.js and latest.json
+        run: |
+          if ('${{ steps.hash.outputs.changed }}' -eq '1') {
+            npm run gen:version
+          } else {
+            # Loader unchanged: only refresh the payload hash.
+            $hash = (Get-FileHash index.js -Algorithm SHA256).Hash.ToLower()
+            $json = Get-Content -Raw latest.json | ConvertFrom-Json
+            $json.payloadSha256 = $hash
+            ($json | ConvertTo-Json -Depth 5) + "`n" | Set-Content -NoNewline -Encoding utf8NoBOM latest.json
+          }
+          git add index.js latest.json
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) { Write-Host 'Nothing to commit'; exit 0 }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore: update build artifacts [skip ci]'
+          git push

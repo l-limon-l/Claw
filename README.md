@@ -48,6 +48,8 @@ Release executable:
 loader-csharp\bin\Release\net48\Claw.exe
 ```
 
+CI (`.github/workflows/release.yml`) does this automatically on every push to `main` that touches `src/`, `loader-csharp/` or `scripts/`: it builds `index.js` and `Claw.exe` on a Windows runner, re-uploads `Claw.exe` to the `Main` release when its hash changed, and commits the new hashes to `latest.json`. It can also be started by hand from the Actions tab.
+
 The release loader targets `.NET Framework 4.8`, embeds the recovered original icon, and downloads the payload from:
 
 ```text
