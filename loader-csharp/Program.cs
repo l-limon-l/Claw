@@ -11,6 +11,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
+using Microsoft.Win32;
 
 namespace ClawInjector
 {
@@ -152,54 +153,153 @@ namespace ClawInjector
                 DiscordChannel.Squirrel("Stable", Path.Combine(localAppData, "Discord"), "Discord.exe"),
                 DiscordChannel.Squirrel("PTB", Path.Combine(localAppData, "DiscordPTB"), "DiscordPTB.exe"),
                 DiscordChannel.Squirrel("Canary", Path.Combine(localAppData, "DiscordCanary"), "DiscordCanary.exe"),
-                DiscordChannel.Flat("Vesktop", "Vesktop.exe",
+                DiscordChannel.Flat("Vesktop", "Vesktop.exe", new[]
+                {
                     Path.Combine(localAppData, "Programs", "vesktop"),
-                    Path.Combine(localAppData, "Programs", "Vesktop"),
                     Path.Combine(programFiles, "Vesktop"),
-                    Path.Combine(userProfile, "scoop", "apps", "vesktop", "current")),
-                DiscordChannel.Flat("Equibop", "Equibop.exe",
+                    Path.Combine(userProfile, "scoop", "apps", "vesktop", "current")
+                }.Concat(FindUninstallLocations("Vesktop")).ToArray()),
+                DiscordChannel.Flat("Equibop", "Equibop.exe", new[]
+                {
                     Path.Combine(localAppData, "Programs", "equibop"),
-                    Path.Combine(localAppData, "Programs", "Equibop"),
                     Path.Combine(programFiles, "Equibop"),
-                    Path.Combine(userProfile, "scoop", "apps", "equibop", "current"))
+                    Path.Combine(userProfile, "scoop", "apps", "equibop", "current")
+                }.Concat(FindUninstallLocations("Equibop")).ToArray())
             };
 
             if (!string.IsNullOrWhiteSpace(preferredClient))
             {
-                List<DiscordChannel> filtered = channels
-                    .Where(c => c.Name.Equals(preferredClient, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-                if (filtered.Count == 0)
+                DiscordChannel forced = channels.FirstOrDefault(c => c.Name.Equals(preferredClient, StringComparison.OrdinalIgnoreCase));
+                if (forced == null)
                 {
                     throw new ArgumentException("Unknown client '" + preferredClient + "'. Use one of: " + string.Join(", ", channels.Select(c => c.Name.ToLowerInvariant())) + ".");
                 }
-                channels = filtered;
-            }
-            else
-            {
-                // Prefer whichever client the user is already running, so people with
-                // both Discord and Vesktop installed get the one they actually use.
-                channels = channels
-                    .OrderByDescending(c => IsProcessRunning(Path.GetFileNameWithoutExtension(c.ExeName)))
-                    .ToList();
+
+                string forcedPath = forced.FindExecutable();
+                if (forcedPath == null)
+                {
+                    throw new FileNotFoundException(string.Format(
+                        "Could not find {0}. Searched: {1}. Set CLAW_DISCORD_EXE to the full executable path.",
+                        forced.Name, string.Join("; ", forced.Roots.Distinct(StringComparer.OrdinalIgnoreCase))));
+                }
+
+                PrintSubStep("Client: " + forced.Name + " (forced)");
+                return forcedPath;
             }
 
+            List<KeyValuePair<DiscordChannel, string>> found = new List<KeyValuePair<DiscordChannel, string>>();
             foreach (DiscordChannel channel in channels)
             {
-                string candidate = channel.FindExecutable();
-                if (candidate != null)
+                string path = channel.FindExecutable();
+                bool running = IsProcessRunning(Path.GetFileNameWithoutExtension(channel.ExeName));
+                PrintSubStep(string.Format("{0,-8} {1}{2}", channel.Name, path ?? "not found", running ? "  [running]" : ""));
+                if (path != null)
                 {
-                    PrintSubStep("Client: " + channel.Name);
-                    return candidate;
+                    found.Add(new KeyValuePair<DiscordChannel, string>(channel, path));
                 }
             }
 
-            if (!string.IsNullOrWhiteSpace(preferredClient))
+            if (found.Count == 0)
             {
-                throw new FileNotFoundException(string.Format("Could not find {0}. Set CLAW_DISCORD_EXE to the full executable path.", channels[0].Name));
+                throw new FileNotFoundException("Could not find Discord Stable/PTB/Canary or Vesktop/Equibop. Set CLAW_DISCORD_EXE to the full executable path, or CLAW_CLIENT=vesktop.");
             }
 
-            throw new FileNotFoundException("Could not find Discord Stable/PTB/Canary or Vesktop/Equibop. Set CLAW_DISCORD_EXE to the full executable path.");
+            // 1) the client the user already has open, 2) the only one installed,
+            // 3) ask, so people with both Discord and Vesktop get the one they use.
+            KeyValuePair<DiscordChannel, string> choice = found
+                .FirstOrDefault(f => IsProcessRunning(Path.GetFileNameWithoutExtension(f.Key.ExeName)));
+
+            if (choice.Key == null)
+            {
+                choice = found.Count == 1 ? found[0] : AskClient(found);
+            }
+
+            PrintSubStep("Client: " + choice.Key.Name);
+            return choice.Value;
+        }
+
+        private static KeyValuePair<DiscordChannel, string> AskClient(List<KeyValuePair<DiscordChannel, string>> found)
+        {
+            try
+            {
+                if (Console.IsInputRedirected)
+                {
+                    return found[0];
+                }
+
+                Console.WriteLine();
+                for (int i = 0; i < found.Count; i++)
+                {
+                    Console.WriteLine("      {0}) {1}", i + 1, found[i].Key.Name);
+                }
+                Console.Write("      Several clients found. Pick one [1-{0}], Enter = 1: ", found.Count);
+                string line = Console.ReadLine();
+                int index;
+                if (int.TryParse((line ?? "").Trim(), out index) && index >= 1 && index <= found.Count)
+                {
+                    return found[index - 1];
+                }
+            }
+            catch
+            {
+                // No interactive console: fall back to the first client.
+            }
+
+            return found[0];
+        }
+
+        private static List<string> FindUninstallLocations(string displayName)
+        {
+            List<string> result = new List<string>();
+            RegistryKey[] hives = { Registry.CurrentUser, Registry.LocalMachine };
+            string[] paths =
+            {
+                @"Software\Microsoft\Windows\CurrentVersion\Uninstall",
+                @"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+            };
+
+            foreach (RegistryKey hive in hives)
+            {
+                foreach (string path in paths)
+                {
+                    try
+                    {
+                        using (RegistryKey root = hive.OpenSubKey(path))
+                        {
+                            if (root == null) continue;
+                            foreach (string subName in root.GetSubKeyNames())
+                            {
+                                using (RegistryKey sub = root.OpenSubKey(subName))
+                                {
+                                    if (sub == null) continue;
+                                    string name = sub.GetValue("DisplayName") as string;
+                                    if (name == null || !name.StartsWith(displayName, StringComparison.OrdinalIgnoreCase)) continue;
+
+                                    string location = sub.GetValue("InstallLocation") as string;
+                                    if (!string.IsNullOrWhiteSpace(location))
+                                    {
+                                        result.Add(location.Trim().Trim('"'));
+                                    }
+
+                                    string icon = sub.GetValue("DisplayIcon") as string;
+                                    if (!string.IsNullOrWhiteSpace(icon))
+                                    {
+                                        string iconPath = icon.Split(',')[0].Trim().Trim('"');
+                                        string dir = Path.GetDirectoryName(iconPath);
+                                        if (!string.IsNullOrEmpty(dir)) result.Add(dir);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // Registry access is best effort.
+                    }
+                }
+            }
+
+            return result;
         }
 
         private static bool IsProcessRunning(string name)
