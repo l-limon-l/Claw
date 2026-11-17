@@ -30,6 +30,9 @@ jobs:
       run:
         shell: pwsh
     steps:
+      # Keep LF line endings so the hashes match the files served from GitHub.
+      - run: git config --global core.autocrlf false
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
