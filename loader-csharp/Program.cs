@@ -7,6 +7,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
 using System.Net.WebSockets;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -190,7 +191,9 @@ namespace ClawInjector
             List<KeyValuePair<DiscordChannel, string>> found = new List<KeyValuePair<DiscordChannel, string>>();
             foreach (DiscordChannel channel in channels)
             {
-                string path = channel.FindExecutable();
+                // A running client tells us exactly where it lives (covers portable
+                // Vesktop and custom install folders), so trust that path first.
+                string path = GetRunningExecutablePath(channel.ExeName) ?? channel.FindExecutable();
                 bool running = IsProcessRunning(Path.GetFileNameWithoutExtension(channel.ExeName));
                 PrintSubStep(string.Format("{0,-8} {1}{2}", channel.Name, path ?? "not found", running ? "  [running]" : ""));
                 if (path != null)
@@ -201,7 +204,7 @@ namespace ClawInjector
 
             if (found.Count == 0)
             {
-                throw new FileNotFoundException("Could not find Discord Stable/PTB/Canary or Vesktop/Equibop. Set CLAW_DISCORD_EXE to the full executable path, or CLAW_CLIENT=vesktop.");
+                throw new FileNotFoundException("Could not find Discord Stable/PTB/Canary or Vesktop/Equibop. Open your client (e.g. portable Vesktop) and run Claw again, or set CLAW_DISCORD_EXE to the full executable path.");
             }
 
             // 1) the client the user already has open, 2) the only one installed,
@@ -300,6 +303,59 @@ namespace ClawInjector
             }
 
             return result;
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr OpenProcess(uint access, bool inheritHandle, int processId);
+
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern bool QueryFullProcessImageName(IntPtr process, int flags, StringBuilder exeName, ref int size);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool CloseHandle(IntPtr handle);
+
+        private const uint ProcessQueryLimitedInformation = 0x1000;
+
+        // Works across 32/64-bit, unlike Process.MainModule.
+        private static string GetRunningExecutablePath(string exeName)
+        {
+            Process[] found = null;
+            try
+            {
+                found = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(exeName));
+                foreach (Process p in found)
+                {
+                    IntPtr handle = OpenProcess(ProcessQueryLimitedInformation, false, p.Id);
+                    if (handle == IntPtr.Zero) continue;
+                    try
+                    {
+                        StringBuilder sb = new StringBuilder(1024);
+                        int size = sb.Capacity;
+                        if (QueryFullProcessImageName(handle, 0, sb, ref size))
+                        {
+                            string path = sb.ToString(0, size);
+                            if (File.Exists(path)) return path;
+                        }
+                    }
+                    finally
+                    {
+                        CloseHandle(handle);
+                    }
+                }
+            }
+            catch
+            {
+                // Best effort.
+            }
+            finally
+            {
+                if (found != null)
+                {
+                    foreach (Process p in found) p.Dispose();
+                }
+            }
+
+            return null;
         }
 
         private static bool IsProcessRunning(string name)
