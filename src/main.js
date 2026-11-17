@@ -338,7 +338,7 @@ if (window.clawLock) {
                         }
 
                         if (!SYS.IS_DESKTOP && (typeData.type === 'GAME' || typeData.type === 'STREAM')) {
-                            Logger.log(`[Quest] "${q.config?.messages?.questName}" requires desktop app. Skipping.`, 'warn');
+                            Logger.log(`[Quest] "${q.config?.messages?.questName}" is a ${typeData.type} quest and needs the official Discord desktop app (not supported in ${SYS.CLIENT}). Skipping.`, 'warn');
                             return;
                         }
 

@@ -16,7 +16,7 @@
 - **Smart Automation**: Toggle auto-enroll, auto-claim, completion sounds, and desktop notifications from the dashboard.
 - **Universal Quest Support**: Handles Game, Video, Stream, Activity, and Achievement quest types with queued API calls and exponential backoff.
 - **Cloud Release Flow**: The loader always pulls the published `index.js`, so users get the latest release payload without copying scripts around.
-- **Improved Loader Reliability**: The C# loader checks DevTools injection errors, waits for `discord.com/channels/...`, supports Stable/PTB/Canary, and reports clear failures.
+- **Improved Loader Reliability**: The C# loader checks DevTools injection errors, waits for `discord.com/channels/...`, supports Stable/PTB/Canary plus **Vesktop** / Equibop (Discord with Vencord), and reports clear failures.
 
 ### 🛠️ Tech Stack
 - JavaScript (ES2020)
@@ -58,6 +58,9 @@ Optional cloud loader variables:
 - `CLAW_PAYLOAD_URL`: override the cloud payload URL.
 - `CLAW_DEBUG_PORT`: override the DevTools port, default `10222`.
 - `CLAW_DISCORD_EXE`: use a specific Discord executable path.
+- `CLAW_CLIENT` (or `--client`): force a client — `stable`, `ptb`, `canary`, `vesktop`, `equibop`. By default the client that is already running wins.
+
+**Vesktop note:** Vesktop runs Discord's web client, so GAME and STREAM quests (which need the official desktop app's native heartbeats) are hidden there. Video, Activity and Achievement quests work normally.
 
 *Disclaimer: Automating interactions technically violates Discord's Terms of Service. This tool is provided strictly for educational and research purposes.*
 
@@ -75,7 +78,7 @@ Optional cloud loader variables:
 - **Умная автоматизация**: Авто-принятие, авто-сбор наград, звук завершения и desktop notifications настраиваются прямо в интерфейсе.
 - **Поддержка разных типов квестов**: Game, Video, Stream, Activity и Achievement через очередь API-запросов и exponential backoff.
 - **Cloud Release Flow**: Loader всегда берет опубликованный `index.js`, поэтому пользователю не нужно переносить скрипты вручную.
-- **Надежный C# Loader**: Проверяет ошибки DevTools injection, ждет `discord.com/channels/...`, поддерживает Stable/PTB/Canary и показывает понятные ошибки.
+- **Надежный C# Loader**: Проверяет ошибки DevTools injection, ждет `discord.com/channels/...`, поддерживает Stable/PTB/Canary, а также **Vesktop** / Equibop (Discord с Vencord), и показывает понятные ошибки.
 
 ### 🛠️ Стек технологий
 - JavaScript (ES2020)
@@ -117,6 +120,9 @@ https://raw.githubusercontent.com/l-limon-l/Claw/main/index.js
 - `CLAW_PAYLOAD_URL`: переопределить cloud payload URL.
 - `CLAW_DEBUG_PORT`: переопределить DevTools port, по умолчанию `10222`.
 - `CLAW_DISCORD_EXE`: указать конкретный путь к Discord executable.
+- `CLAW_CLIENT` (или `--client`): выбрать клиент — `stable`, `ptb`, `canary`, `vesktop`, `equibop`. По умолчанию берётся тот, что уже запущен.
+
+**Про Vesktop:** Vesktop работает на веб-клиенте Discord, поэтому GAME и STREAM квесты (им нужны нативные heartbeat официального десктоп-приложения) там скрыты. Video, Activity и Achievement квесты работают как обычно.
 
 *Отказ от ответственности: автоматизация нарушает Terms of Service Discord. Инструмент создан исключительно в образовательных и исследовательских целях.*
 

@@ -1,5 +1,5 @@
 import { Logger } from './logger.js';
-import { CONST, CONFIG } from './config.js';
+import { CONST, CONFIG, SYS } from './config.js';
 
 export let Mods = {};
 
@@ -118,7 +118,10 @@ export function loadModules(options = {}) {
     const quiet = options.quiet === true;
     try {
         if (typeof window.Vencord !== 'undefined' && window.Vencord.Webpack) {
-            if (!quiet) Logger.log('[System] Vencord detected. Using Vencord Webpack API...', 'info');
+            if (!quiet) {
+                Logger.log(`[System] Vencord detected (${SYS.CLIENT}). Using Vencord Webpack API...`, 'info');
+                if (!SYS.IS_DESKTOP) Logger.log('[System] GAME/STREAM quests need the official Discord desktop app and are hidden here. Video, Activity and Achievement quests work.', 'warn');
+            }
             const W = window.Vencord.Webpack;
 
             let routerModule;

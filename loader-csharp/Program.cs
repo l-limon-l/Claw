@@ -29,6 +29,11 @@ namespace ClawInjector
             Timeout = TimeSpan.FromSeconds(10)
         };
 
+        private static readonly string[] KnownClientProcessNames =
+        {
+            "Discord", "DiscordPTB", "DiscordCanary", "Vesktop", "Equibop"
+        };
+
         private static readonly JavaScriptSerializer Json = new JavaScriptSerializer
         {
             MaxJsonLength = int.MaxValue,
@@ -61,7 +66,7 @@ namespace ClawInjector
                 await CheckSelfUpdateAsync(options);
 
                 PrintStep("[1/5]", "Resolving Discord...");
-                string discordPath = ResolveDiscordExecutable(options.DiscordExe);
+                string discordPath = ResolveDiscordExecutable(options.DiscordExe, options.Client);
                 PrintSubStep(discordPath);
 
                 PrintStep("[2/5]", "Checking debug port and closing Discord...");
@@ -127,7 +132,7 @@ namespace ClawInjector
             }
         }
 
-        private static string ResolveDiscordExecutable(string explicitPath)
+        private static string ResolveDiscordExecutable(string explicitPath, string preferredClient)
         {
             if (!string.IsNullOrWhiteSpace(explicitPath))
             {
@@ -139,42 +144,90 @@ namespace ClawInjector
             }
 
             string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            DiscordChannel[] channels =
+            string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+            List<DiscordChannel> channels = new List<DiscordChannel>
             {
-                new DiscordChannel("Stable", Path.Combine(localAppData, "Discord"), "Discord.exe"),
-                new DiscordChannel("PTB", Path.Combine(localAppData, "DiscordPTB"), "DiscordPTB.exe"),
-                new DiscordChannel("Canary", Path.Combine(localAppData, "DiscordCanary"), "DiscordCanary.exe")
+                DiscordChannel.Squirrel("Stable", Path.Combine(localAppData, "Discord"), "Discord.exe"),
+                DiscordChannel.Squirrel("PTB", Path.Combine(localAppData, "DiscordPTB"), "DiscordPTB.exe"),
+                DiscordChannel.Squirrel("Canary", Path.Combine(localAppData, "DiscordCanary"), "DiscordCanary.exe"),
+                DiscordChannel.Flat("Vesktop", "Vesktop.exe",
+                    Path.Combine(localAppData, "Programs", "vesktop"),
+                    Path.Combine(localAppData, "Programs", "Vesktop"),
+                    Path.Combine(programFiles, "Vesktop"),
+                    Path.Combine(userProfile, "scoop", "apps", "vesktop", "current")),
+                DiscordChannel.Flat("Equibop", "Equibop.exe",
+                    Path.Combine(localAppData, "Programs", "equibop"),
+                    Path.Combine(localAppData, "Programs", "Equibop"),
+                    Path.Combine(programFiles, "Equibop"),
+                    Path.Combine(userProfile, "scoop", "apps", "equibop", "current"))
             };
+
+            if (!string.IsNullOrWhiteSpace(preferredClient))
+            {
+                List<DiscordChannel> filtered = channels
+                    .Where(c => c.Name.Equals(preferredClient, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                if (filtered.Count == 0)
+                {
+                    throw new ArgumentException("Unknown client '" + preferredClient + "'. Use one of: " + string.Join(", ", channels.Select(c => c.Name.ToLowerInvariant())) + ".");
+                }
+                channels = filtered;
+            }
+            else
+            {
+                // Prefer whichever client the user is already running, so people with
+                // both Discord and Vesktop installed get the one they actually use.
+                channels = channels
+                    .OrderByDescending(c => IsProcessRunning(Path.GetFileNameWithoutExtension(c.ExeName)))
+                    .ToList();
+            }
 
             foreach (DiscordChannel channel in channels)
             {
-                if (!Directory.Exists(channel.Root))
+                string candidate = channel.FindExecutable();
+                if (candidate != null)
                 {
-                    continue;
-                }
-
-                IEnumerable<string> appDirs = Directory.GetDirectories(channel.Root, "app-*")
-                    .OrderByDescending(Path.GetFileName);
-
-                foreach (string appDir in appDirs)
-                {
-                    string candidate = Path.Combine(appDir, channel.ExeName);
-                    if (File.Exists(candidate))
-                    {
-                        return candidate;
-                    }
+                    PrintSubStep("Client: " + channel.Name);
+                    return candidate;
                 }
             }
 
-            throw new FileNotFoundException("Could not find Discord Stable/PTB/Canary. Set CLAW_DISCORD_EXE to the full Discord executable path.");
+            if (!string.IsNullOrWhiteSpace(preferredClient))
+            {
+                throw new FileNotFoundException(string.Format("Could not find {0}. Set CLAW_DISCORD_EXE to the full executable path.", channels[0].Name));
+            }
+
+            throw new FileNotFoundException("Could not find Discord Stable/PTB/Canary or Vesktop/Equibop. Set CLAW_DISCORD_EXE to the full executable path.");
+        }
+
+        private static bool IsProcessRunning(string name)
+        {
+            Process[] found = null;
+            try
+            {
+                found = Process.GetProcessesByName(name);
+                return found.Length > 0;
+            }
+            catch
+            {
+                return false;
+            }
+            finally
+            {
+                if (found != null)
+                {
+                    foreach (Process p in found) p.Dispose();
+                }
+            }
         }
 
         private static void StopDiscordProcesses()
         {
-            string[] names = { "Discord", "DiscordPTB", "DiscordCanary" };
             List<Process> processes = new List<Process>();
 
-            foreach (string name in names)
+            foreach (string name in KnownClientProcessNames)
             {
                 try
                 {
@@ -346,8 +399,7 @@ namespace ClawInjector
 
         private static bool IsDiscordProcess(Process process)
         {
-            string[] names = { "Discord", "DiscordPTB", "DiscordCanary" };
-            if (names.Contains(process.ProcessName, StringComparer.OrdinalIgnoreCase))
+            if (KnownClientProcessNames.Contains(process.ProcessName, StringComparer.OrdinalIgnoreCase))
             {
                 return true;
             }
@@ -355,8 +407,10 @@ namespace ClawInjector
             try
             {
                 string path = process.MainModule == null ? "" : process.MainModule.FileName;
-                return path.IndexOf("\\Discord", StringComparison.OrdinalIgnoreCase) >= 0
-                    && Path.GetFileName(path).StartsWith("Discord", StringComparison.OrdinalIgnoreCase);
+                string file = Path.GetFileName(path);
+                return KnownClientProcessNames.Any(name =>
+                    path.IndexOf("\\" + name, StringComparison.OrdinalIgnoreCase) >= 0
+                    && file.StartsWith(name, StringComparison.OrdinalIgnoreCase));
             }
             catch
             {
@@ -1093,16 +1147,65 @@ namespace ClawInjector
 
         private sealed class DiscordChannel
         {
-            public DiscordChannel(string name, string root, string exeName)
+            private DiscordChannel(string name, string exeName, bool squirrel, string[] roots)
             {
                 Name = name;
-                Root = root;
                 ExeName = exeName;
+                IsSquirrel = squirrel;
+                Roots = roots;
+            }
+
+            // Official Discord: <root>\app-x.y.z\Discord.exe (Squirrel layout).
+            public static DiscordChannel Squirrel(string name, string root, string exeName)
+            {
+                return new DiscordChannel(name, exeName, true, new[] { root });
+            }
+
+            // Vesktop/Equibop: electron-builder installs the exe directly in the folder.
+            public static DiscordChannel Flat(string name, string exeName, params string[] roots)
+            {
+                return new DiscordChannel(name, exeName, false, roots);
             }
 
             public string Name { get; private set; }
-            public string Root { get; private set; }
             public string ExeName { get; private set; }
+            public bool IsSquirrel { get; private set; }
+            public string[] Roots { get; private set; }
+
+            public string FindExecutable()
+            {
+                foreach (string root in Roots)
+                {
+                    if (string.IsNullOrEmpty(root) || !Directory.Exists(root))
+                    {
+                        continue;
+                    }
+
+                    if (!IsSquirrel)
+                    {
+                        string direct = Path.Combine(root, ExeName);
+                        if (File.Exists(direct))
+                        {
+                            return direct;
+                        }
+                        continue;
+                    }
+
+                    IEnumerable<string> appDirs = Directory.GetDirectories(root, "app-*")
+                        .OrderByDescending(Path.GetFileName);
+
+                    foreach (string appDir in appDirs)
+                    {
+                        string candidate = Path.Combine(appDir, ExeName);
+                        if (File.Exists(candidate))
+                        {
+                            return candidate;
+                        }
+                    }
+                }
+
+                return null;
+            }
         }
 
         private sealed class DevToolsTarget
@@ -1120,6 +1223,7 @@ namespace ClawInjector
             public string LatestMetadataUrl { get; private set; }
             public string BinaryDownloadUrl { get; private set; }
             public string DiscordExe { get; private set; }
+            public string Client { get; private set; }
 
             public static LoaderOptions Parse(string[] args)
             {
@@ -1128,6 +1232,7 @@ namespace ClawInjector
                 string metadataUrl = Environment.GetEnvironmentVariable("CLAW_METADATA_URL") ?? DefaultLatestMetadataUrl;
                 string binaryUrl = Environment.GetEnvironmentVariable("CLAW_BINARY_URL") ?? DefaultBinaryDownloadUrl;
                 string discordExe = Environment.GetEnvironmentVariable("CLAW_DISCORD_EXE");
+                string client = Environment.GetEnvironmentVariable("CLAW_CLIENT");
 
                 for (int i = 0; i < args.Length; i++)
                 {
@@ -1166,6 +1271,10 @@ namespace ClawInjector
                             if (i + 1 >= args.Length) throw new ArgumentException("Missing value for --discord-exe.");
                             discordExe = args[++i];
                             break;
+                        case "--client":
+                            if (i + 1 >= args.Length) throw new ArgumentException("Missing value for --client.");
+                            client = args[++i];
+                            break;
                     }
                 }
 
@@ -1175,7 +1284,8 @@ namespace ClawInjector
                     PayloadUrl = payloadUrl,
                     LatestMetadataUrl = metadataUrl,
                     BinaryDownloadUrl = binaryUrl,
-                    DiscordExe = discordExe
+                    DiscordExe = discordExe,
+                    Client = client
                 };
             }
 

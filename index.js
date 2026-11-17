@@ -36,7 +36,10 @@
         MAX_TIME: 25 * 60 * 1e3,
         MAX_TASK_FAILURES: 5,
         MAX_RETRIES: 3,
-        IS_DESKTOP: typeof window.DiscordNative !== "undefined"
+        // Only the official desktop client sends native GAME/STREAM heartbeats.
+        // Vesktop/Equibop expose VesktopNative instead and behave like the web client.
+        IS_DESKTOP: typeof window.DiscordNative !== "undefined",
+        CLIENT: typeof window.DiscordNative !== "undefined" ? "Discord Desktop" : typeof window.VesktopNative !== "undefined" ? "Vesktop" : "Browser"
       });
       RUNTIME = {
         running: true,
@@ -204,7 +207,10 @@
         return void 0;
       };
       if (typeof window.Vencord !== "undefined" && window.Vencord.Webpack) {
-        if (!quiet) Logger.log("[System] Vencord detected. Using Vencord Webpack API...", "info");
+        if (!quiet) {
+          Logger.log(`[System] Vencord detected (${SYS.CLIENT}). Using Vencord Webpack API...`, "info");
+          if (!SYS.IS_DESKTOP) Logger.log("[System] GAME/STREAM quests need the official Discord desktop app and are hidden here. Video, Activity and Achievement quests work.", "warn");
+        }
         const W = window.Vencord.Webpack;
         let routerModule;
         try {
@@ -2307,7 +2313,7 @@
                     return;
                   }
                   if (!SYS.IS_DESKTOP && (typeData.type === "GAME" || typeData.type === "STREAM")) {
-                    Logger.log(`[Quest] "${q.config?.messages?.questName}" requires desktop app. Skipping.`, "warn");
+                    Logger.log(`[Quest] "${q.config?.messages?.questName}" is a ${typeData.type} quest and needs the official Discord desktop app (not supported in ${SYS.CLIENT}). Skipping.`, "warn");
                     return;
                   }
                   const { type, keyName, target, appId } = typeData;

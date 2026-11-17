@@ -15,7 +15,12 @@ export const SYS = Object.freeze({
     MAX_TIME: 25 * 60 * 1000,
     MAX_TASK_FAILURES: 5,
     MAX_RETRIES: 3,
-    IS_DESKTOP: typeof window.DiscordNative !== 'undefined'
+    // Only the official desktop client sends native GAME/STREAM heartbeats.
+    // Vesktop/Equibop expose VesktopNative instead and behave like the web client.
+    IS_DESKTOP: typeof window.DiscordNative !== 'undefined',
+    CLIENT: typeof window.DiscordNative !== 'undefined' ? 'Discord Desktop'
+        : typeof window.VesktopNative !== 'undefined' ? 'Vesktop'
+        : 'Browser'
 });
 
 export const RUNTIME = {
