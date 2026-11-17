@@ -48,13 +48,14 @@ if (window.clawLock) {
             );
 
             const items = [];
+            let hiddenDesktopOnly = 0;
             incomplete.forEach(q => {
                 const cfg = q.config?.taskConfig ?? q.config?.taskConfigV2;
                 const td = cfg?.tasks ? Tasks.detectType(cfg, q.config?.application?.id) : null;
 
                 if (!td) return;
                 
-                if (!SYS.IS_DESKTOP && (td.type === 'GAME' || td.type === 'STREAM')) return;
+                if (!SYS.IS_DESKTOP && (td.type === 'GAME' || td.type === 'STREAM')) { hiddenDesktopOnly++; return; }
 
                 const rw = q.config?.rewardsConfig?.rewards?.[0];
                 let rewardType = rw?.type ?? 0;
@@ -69,15 +70,21 @@ if (window.clawLock) {
                 });
             });
 
+            const clientNotice = hiddenDesktopOnly ? `
+                <div class="claw-client-notice" style="margin: 6px 4px 8px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--warn-bright); background: rgba(245, 158, 11, 0.08); color: var(--warn-bright); font-size: 12px; line-height: 1.4;">
+                    <b>${hiddenDesktopOnly} GAME/STREAM quest${hiddenDesktopOnly === 1 ? '' : 's'} hidden.</b>
+                    ${esc(SYS.CLIENT)} can't run them — they need the official Discord desktop app (Discord + Vencord via the installer works).
+                </div>` : '';
+
             const rewardTypes = [...new Set(items.map(q => q.rt))].sort();
             const meta = rt => REWARD_META[rt] ?? REWARD_FALLBACK;
 
             if (!items.length) {
 
-                body.innerHTML = `
+                body.innerHTML = `${clientNotice}
                     <div style="padding: 16px; text-align: center; color: var(--text-tertiary); font-size: 13px; margin-bottom: 8px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 24px;">
                         <div style="margin-bottom: 12px; opacity: 0.7;">${ICONS.CHECK}</div>
-                        <div>You have completed all available quests!</div>
+                        <div>${hiddenDesktopOnly ? `No quests this client can run.` : `You have completed all available quests!`}</div>
                     </div>
                     <div style="padding: 8px 0 2px;">
                         <div class="quest-pick-section">Options</div>
@@ -104,7 +111,7 @@ if (window.clawLock) {
                     </div>
                 `;
             } else {
-                body.innerHTML = `
+                body.innerHTML = `${clientNotice}
                     <div style="padding: 6px 4px 0;">
                         <div class="quest-pick-section">Filter by reward</div>
                         <div class="quest-pick-filters">
